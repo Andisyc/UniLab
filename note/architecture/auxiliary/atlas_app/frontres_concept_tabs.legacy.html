@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FrontRES Concept Tabs</title>
+  <style>
+    :root {
+      --ink: #1f2933;
+      --muted: #5d6976;
+      --paper: #fbfaf4;
+      --panel: #fffdf6;
+      --line: #d9d2c3;
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--paper);
+      font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--line);
+      background: #fffef9;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 18px;
+      letter-spacing: 0;
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    button {
+      border: 1px solid #b9b1a2;
+      background: #fff7df;
+      color: var(--ink);
+      padding: 6px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      font: inherit;
+    }
+
+    main {
+      display: grid;
+      grid-template-columns: minmax(330px, 0.34fr) minmax(720px, 1fr);
+      height: calc(100vh - 54px);
+      min-height: 620px;
+    }
+
+    aside {
+      border-right: 1px solid var(--line);
+      background: var(--panel);
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    .hint {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    textarea {
+      flex: 1;
+      width: 100%;
+      box-sizing: border-box;
+      resize: none;
+      border: 0;
+      outline: 0;
+      padding: 14px;
+      background: #fffdf8;
+      color: #222;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.45;
+      tab-size: 2;
+    }
+
+    .stage {
+      position: relative;
+      overflow: auto;
+      background:
+        linear-gradient(rgba(31, 41, 51, 0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(31, 41, 51, 0.025) 1px, transparent 1px),
+        var(--paper);
+      background-size: 24px 24px;
+    }
+
+    svg {
+      display: block;
+      width: 1480px;
+      height: 980px;
+    }
+
+    .status {
+      font-variant-numeric: tabular-nums;
+    }
+
+    @media (max-width: 1040px) {
+      main {
+        grid-template-columns: 1fr;
+        height: auto;
+      }
+
+      aside {
+        height: 360px;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>FrontRES Concept Tabs</h1>
+    <div class="toolbar">
+      <span class="status" id="status">loading</span>
+      <button id="reload">Reload JSON</button>
+      <button id="render">Render Editor</button>
+    </div>
+  </header>
+  <main>
+    <aside>
+      <div class="hint">
+        Edit <code>concept/03_frontres_concept_tabs.data.json</code> in VSCode and keep this HTML open on the side.
+        When served by <code>serve_architecture.mjs</code>, saving JSON refreshes this drawing automatically.
+      </div>
+      <textarea id="source" spellcheck="false"></textarea>
+    </aside>
+    <section class="stage">
+      <svg id="diagram" viewBox="0 0 1480 980" role="img" aria-label="FrontRES concept tabs"></svg>
+    </section>
+  </main>
+
+  <script type="module">
+    import rough from "./node_modules/roughjs/bundled/rough.esm.js";
+
+    const source = document.getElementById("source");
+    const status = document.getElementById("status");
+    const svg = document.getElementById("diagram");
+    const reloadButton = document.getElementById("reload");
+    const renderButton = document.getElementById("render");
+    const dataUrl = "../../concept/03_frontres_concept_tabs.data.json";
+    let lastServerData = null;
+
+    function setStatus(text) {
+      status.textContent = text;
+    }
+
+    function clearSvg() {
+      while (svg.firstChild) svg.removeChild(svg.firstChild);
+    }
+
+    function addText(text, x, y, options = {}) {
+      const el = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      el.setAttribute("x", x);
+      el.setAttribute("y", y);
+      el.setAttribute("fill", options.fill || "#1f2933");
+      el.setAttribute("font-size", options.size || 18);
+      el.setAttribute("font-weight", options.weight || 500);
+      el.setAttribute("font-family", options.family || "ui-sans-serif, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif");
+      el.textContent = text;
+      svg.appendChild(el);
+      return el;
+    }
+
+    function wrapText(text, x, y, width, options = {}) {
+      const words = String(text).split(/\s+/);
+      const lines = [];
+      let line = "";
+      for (const word of words) {
+        const probe = line ? `${line} ${word}` : word;
+        if (probe.length * (options.charWidth || 7.2) > width && line) {
+          lines.push(line);
+          line = word;
+        } else {
+          line = probe;
+        }
+      }
+      if (line) lines.push(line);
+      lines.slice(0, options.maxLines || 3).forEach((ln, idx) => {
+        addText(ln, x, y + idx * (options.lineHeight || 18), {
+          size: options.size || 13,
+          fill: options.fill || "#364250",
+          weight: options.weight || 400,
+        });
+      });
+    }
+
+    function colorWithAlpha(hex, alpha) {
+      const clean = hex.replace("#", "");
+      const r = parseInt(clean.slice(0, 2), 16);
+      const g = parseInt(clean.slice(2, 4), 16);
+      const b = parseInt(clean.slice(4, 6), 16);
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    }
+
+    function render(data) {
+      clearSvg();
+      const rc = rough.svg(svg);
+      const positions = new Map();
+      const cols = [
+        { x: 70, y: 150, w: 380 },
+        { x: 550, y: 150, w: 380 },
+        { x: 1030, y: 150, w: 380 },
+      ];
+
+      svg.appendChild(rc.rectangle(28, 26, 1424, 910, {
+        stroke: "#d8cdb8",
+        strokeWidth: 1.2,
+        roughness: 0.9,
+        bowing: 0.6,
+        fill: "rgba(255,255,255,0.35)",
+        fillStyle: "solid",
+      }));
+      addText(data.title || "Architecture Map", 70, 82, { size: 34, weight: 800 });
+      addText("Concept -> Code -> Diagnostics", 74, 116, { size: 15, fill: "#5d6976", weight: 500 });
+
+      (data.tabs || []).forEach((tab, idx) => {
+        const col = cols[idx] || cols[cols.length - 1];
+        const tabColor = tab.color || "#6688aa";
+        const cards = tab.cards || [];
+        const tabHeight = Math.max(650, 92 + cards.length * 102);
+
+        svg.appendChild(rc.rectangle(col.x, col.y, col.w, tabHeight, {
+          stroke: tabColor,
+          strokeWidth: 2.4,
+          roughness: 1.8,
+          bowing: 1.2,
+          fill: colorWithAlpha(tabColor, 0.08),
+          fillStyle: "hachure",
+          hachureGap: 8,
+        }));
+        svg.appendChild(rc.rectangle(col.x + 18, col.y - 36, 240, 52, {
+          stroke: tabColor,
+          strokeWidth: 2.3,
+          roughness: 1.5,
+          bowing: 1.1,
+          fill: colorWithAlpha(tabColor, 0.2),
+          fillStyle: "solid",
+        }));
+        addText(`${tab.id}  ${tab.title}`, col.x + 34, col.y - 5, {
+          size: 20,
+          weight: 800,
+          fill: "#202832",
+        });
+
+        cards.forEach((card, cardIdx) => {
+          const cardX = col.x + 28;
+          const cardY = col.y + 44 + cardIdx * 102;
+          const cardW = col.w - 56;
+          const cardH = 74;
+          positions.set(card.id, {
+            x: cardX + cardW / 2,
+            y: cardY + cardH / 2,
+            left: cardX,
+            right: cardX + cardW,
+            top: cardY,
+            bottom: cardY + cardH,
+            color: tabColor,
+          });
+          svg.appendChild(rc.rectangle(cardX, cardY, cardW, cardH, {
+            stroke: "#1f2933",
+            strokeWidth: 1.4,
+            roughness: 1.5,
+            bowing: 1.2,
+            fill: colorWithAlpha(tabColor, 0.16),
+            fillStyle: "solid",
+          }));
+          addText(`${card.id}  ${card.title}`, cardX + 18, cardY + 27, {
+            size: 16,
+            weight: 800,
+            fill: "#1f2933",
+          });
+          wrapText(card.body || "", cardX + 18, cardY + 50, cardW - 36, {
+            size: 12,
+            maxLines: 2,
+            lineHeight: 15,
+            charWidth: 6.4,
+            fill: "#495463",
+          });
+        });
+      });
+
+      (data.links || []).forEach(([from, to]) => {
+        const a = positions.get(from);
+        const b = positions.get(to);
+        if (!a || !b) return;
+        const startX = a.right;
+        const startY = a.y;
+        const endX = b.left;
+        const endY = b.y;
+        const midX = (startX + endX) / 2;
+        svg.appendChild(rc.path(`M ${startX} ${startY} C ${midX} ${startY}, ${midX} ${endY}, ${endX} ${endY}`, {
+          stroke: b.color || "#4d657b",
+          strokeWidth: 2.2,
+          roughness: 1.8,
+          bowing: 1.1,
+        }));
+        svg.appendChild(rc.circle(endX, endY, 8, {
+          stroke: b.color || "#4d657b",
+          strokeWidth: 1.2,
+          fill: b.color || "#4d657b",
+          fillStyle: "solid",
+        }));
+      });
+    }
+
+    async function loadFromFile() {
+      const response = await fetch(`${dataUrl}?t=${Date.now()}`);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      lastServerData = data;
+      source.value = JSON.stringify(data, null, 2);
+      render(data);
+      setStatus(`loaded ${new Date().toLocaleTimeString()}`);
+    }
+
+    function renderEditor() {
+      try {
+        const data = JSON.parse(source.value);
+        render(data);
+        setStatus(`rendered editor ${new Date().toLocaleTimeString()}`);
+      } catch (error) {
+        setStatus(`JSON error: ${error.message}`);
+      }
+    }
+
+    reloadButton.addEventListener("click", () => loadFromFile().catch((error) => setStatus(error.message)));
+    renderButton.addEventListener("click", renderEditor);
+    source.addEventListener("input", () => {
+      window.clearTimeout(source._renderTimer);
+      source._renderTimer = window.setTimeout(renderEditor, 250);
+    });
+
+    if ("EventSource" in window) {
+      const events = new EventSource("/events");
+      events.addEventListener("architecture-data", () => {
+        loadFromFile().catch((error) => setStatus(error.message));
+      });
+      events.addEventListener("open", () => {
+        if (lastServerData) setStatus("watching JSON");
+      });
+    }
+
+    loadFromFile().catch((error) => {
+      source.value = JSON.stringify({ title: "FrontRES Concept Tabs", tabs: [], links: [] }, null, 2);
+      renderEditor();
+      setStatus(`open through serve_architecture.mjs: ${error.message}`);
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,299 @@
+{
+  "title": "UniLab Repo Architecture",
+  "subtitle": "VSCode-style ownership map for the UniLab heterogeneous robot RL runtime.",
+  "layout": "repo_tree",
+  "root": "UniLab",
+  "concepts": {
+    "C-ENTRY": {
+      "name": "CLI and script assembly",
+      "color": "#475569"
+    },
+    "C-CONFIG": {
+      "name": "Hydra task-owner config",
+      "color": "#2563eb"
+    },
+    "C-REGISTRY": {
+      "name": "environment registry contract",
+      "color": "#7c3aed"
+    },
+    "C-BACKEND": {
+      "name": "simulation backend abstraction",
+      "color": "#059669"
+    },
+    "C-ENV": {
+      "name": "robot task environments",
+      "color": "#d97706"
+    },
+    "C-ALGO": {
+      "name": "policy learning runtimes",
+      "color": "#dc2626"
+    },
+    "C-IPC": {
+      "name": "collector IPC and replay transport",
+      "color": "#0891b2"
+    },
+    "C-OBS": {
+      "name": "observation / reward / DR contracts",
+      "color": "#0f766e"
+    },
+    "C-ASSET": {
+      "name": "robot assets and demos",
+      "color": "#9333ea"
+    }
+  },
+  "files": [
+    {
+      "group": "Entry",
+      "path": "src/unilab/cli.py",
+      "color": "#475569",
+      "blocks": [
+        {
+          "id": "U-E-01",
+          "role": "统一用户 CLI。把 train/eval/demo 参数路由到脚本、config group、task owner YAML 和运行 Python。限制路由型 override 只能从显式 flag 进入。",
+          "lines": "18-33 constants/Route; 172-247 build_route/build_command; 253-330 parsers/main",
+          "concept": "C-ENTRY"
+        }
+      ]
+    },
+    {
+      "group": "Entry",
+      "path": "scripts/train_rsl_rl.py / train_mlx_ppo.py / train_appo.py / train_offpolicy.py",
+      "color": "#475569",
+      "blocks": [
+        {
+          "id": "U-E-02",
+          "role": "Hydra 训练入口。只做装配：解析 cfg、注册环境、构造 env/runner、处理 checkpoint、日志和回放。",
+          "lines": "train_rsl_rl.py:185-344; train_mlx_ppo.py:197-430; train_appo.py:24-74,157-430; train_offpolicy.py:150-235,387-720",
+          "concept": "C-ENTRY"
+        }
+      ]
+    },
+    {
+      "group": "Config",
+      "path": "conf/{ppo,appo,offpolicy,hora_distill,ppo_him}/config.yaml",
+      "color": "#2563eb",
+      "blocks": [
+        {
+          "id": "U-C-01",
+          "role": "算法级 Hydra 根配置。定义训练设备、日志、runner 参数和默认 task choice。",
+          "lines": "conf/ppo/config.yaml:1-80; conf/appo/config.yaml:1-90; conf/offpolicy/config.yaml:1-95; conf/hora_distill/config.yaml:1-90; conf/ppo_him/config.yaml:1-80",
+          "concept": "C-CONFIG"
+        }
+      ]
+    },
+    {
+      "group": "Config",
+      "path": "conf/*/task/<task>/<backend>.yaml",
+      "color": "#2563eb",
+      "blocks": [
+        {
+          "id": "U-C-02",
+          "role": "任务 owner 配置。把 task、reward、backend、scene、domain randomization 和 algorithm 参数绑在同一选择上。",
+          "lines": "conf/ppo/task/g1_walk_flat/mujoco.yaml:1-37; conf/ppo/task/g1_walk_flat/motrix.yaml:1-68; conf/offpolicy/task/sac/g1_walk_flat/mujoco.yaml:1-52; conf/appo/task/go2_joystick_flat/motrix.yaml:1-70",
+          "concept": "C-CONFIG"
+        }
+      ]
+    },
+    {
+      "group": "Core Contract",
+      "path": "src/unilab/base/registry.py",
+      "color": "#7c3aed",
+      "blocks": [
+        {
+          "id": "U-R-01",
+          "role": "环境注册中心。维护 env config 与 mujoco/motrix 实现的绑定，暴露 registry.make(...) 作为 task 构造入口。",
+          "lines": "1-240",
+          "concept": "C-REGISTRY"
+        },
+        {
+          "id": "U-R-02",
+          "role": "dataclass override 合并。把 Hydra owner YAML 的嵌套覆盖写入 EnvCfg，同时保护未知字段。",
+          "lines": "88-150",
+          "concept": "C-CONFIG"
+        }
+      ]
+    },
+    {
+      "group": "Core Contract",
+      "path": "src/unilab/base/np_env.py / base.py / scene.py / observations.py",
+      "color": "#0f766e",
+      "blocks": [
+        {
+          "id": "U-O-01",
+          "role": "环境基础 contract。约束 reset/step 返回、obs_dict、scene、action/observation spaces 和 final observation 语义。",
+          "lines": "base.py:16-92 EnvCfg/ABEnv; np_env.py:26-80 NpEnvState/NpEnv; scene.py:18-30 SceneCfg; observations.py:16-30 split/get dims",
+          "concept": "C-OBS"
+        }
+      ]
+    },
+    {
+      "group": "Backend",
+      "path": "src/unilab/base/backend/base.py",
+      "color": "#059669",
+      "blocks": [
+        {
+          "id": "U-B-01",
+          "role": "SimBackend 抽象边界。统一模型查询、状态读写、step、terrain scan、domain randomization 和 playback render plan。",
+          "lines": "20-48 playback caps/plans; 58-242 SimBackend core; 343-382 playback plan/run_playback",
+          "concept": "C-BACKEND"
+        }
+      ]
+    },
+    {
+      "group": "Backend",
+      "path": "src/unilab/base/backend/mujoco/*",
+      "color": "#059669",
+      "blocks": [
+        {
+          "id": "U-B-02",
+          "role": "MuJoCo 后端适配。把 MuJoCo/MuJoCoUni 模型、XML、状态和回放能力实现到 SimBackend contract。",
+          "lines": "backend.py:53-80 height scanner; backend.py:267-520 MuJoCoBackend; xml.py:1-120 XML helpers; playback.py:1-140 playback bridge",
+          "concept": "C-BACKEND"
+        }
+      ]
+    },
+    {
+      "group": "Backend",
+      "path": "src/unilab/base/backend/motrix/*",
+      "color": "#059669",
+      "blocks": [
+        {
+          "id": "U-B-03",
+          "role": "Motrix 后端适配。提供 MotrixSim scene、native renderer、状态推进和 backend-specific playback。",
+          "lines": "backend.py:72-120 terrain scanner; backend.py:132-420 MotrixBackend; scene.py:1-180 scene bridge; playback.py:1-180 native playback",
+          "concept": "C-BACKEND"
+        }
+      ]
+    },
+    {
+      "group": "Environments",
+      "path": "src/unilab/envs/locomotion/*",
+      "color": "#d97706",
+      "blocks": [
+        {
+          "id": "U-T-01",
+          "role": "运动控制任务族。覆盖 G1、Go1、Go2、Go2W、Go2 Arm 等 joystick、rough、footstand、manip-loco 任务。",
+          "lines": "g1/joystick.py:196-360 cfg/env/rewards; g1/joystick.py:386-627 obs/gait/action; go2/joystick.py:58-150; go2w/joystick.py:88-260; go2_arm/manip_loco.py:166-330",
+          "concept": "C-ENV"
+        }
+      ]
+    },
+    {
+      "group": "Environments",
+      "path": "src/unilab/envs/manipulation/*",
+      "color": "#d97706",
+      "blocks": [
+        {
+          "id": "U-T-02",
+          "role": "操作任务族。覆盖 Allegro、Sharpa in-hand、Stewart balance 等手内旋转、抓取和平台任务。",
+          "lines": "allegro_inhand/base.py:28-180; sharpa_inhand/base.py:155-360; stewart/balance.py:61-210",
+          "concept": "C-ENV"
+        }
+      ]
+    },
+    {
+      "group": "Environments",
+      "path": "src/unilab/envs/motion_tracking/*",
+      "color": "#d97706",
+      "blocks": [
+        {
+          "id": "U-T-03",
+          "role": "动作跟踪任务族。提供 G1 motion/flip/wall/box tracking、motion loader 和 SAC-compatible variants。",
+          "lines": "g1/tracking.py:133-220 cfg; g1/tracking.py:448-760 env core; g1/flip_tracking.py:47-145 variants; g1/box_tracking.py:53-220 box variant",
+          "concept": "C-ENV"
+        }
+      ]
+    },
+    {
+      "group": "Learning",
+      "path": "src/unilab/algos/torch/*",
+      "color": "#dc2626",
+      "blocks": [
+        {
+          "id": "U-A-01",
+          "role": "Torch 算法运行时。包含 RSL-RL PPO adapter、APPO、HORA、HIM-PPO、SAC/TD3、FastSAC/FlashSAC 等 learner/runner。",
+          "lines": "appo/runner.py:47-220; offpolicy/double_buffer_runner.py:41-220; fast_sac/learner.py:356-560; flash_sac/runner.py:1-220; rsl_rl_ppo.py:1-180",
+          "concept": "C-ALGO"
+        }
+      ]
+    },
+    {
+      "group": "Learning",
+      "path": "src/unilab/algos/mlx/*",
+      "color": "#dc2626",
+      "blocks": [
+        {
+          "id": "U-A-02",
+          "role": "MLX PPO 运行时。面向 Apple Silicon 的 model、ppo、runner、rollout storage 和 common NN utilities。",
+          "lines": "mlx/ppo/runner.py:1-220; mlx/ppo/ppo.py:1-220; mlx/ppo/model.py:1-180; mlx/common/rollout_storage.py:1-180",
+          "concept": "C-ALGO"
+        }
+      ]
+    },
+    {
+      "group": "IPC",
+      "path": "src/unilab/ipc/async_runner.py",
+      "color": "#0891b2",
+      "blocks": [
+        {
+          "id": "U-I-01",
+          "role": "异步 runner 生命周期。管理 collector 子进程、stop event、错误管道和 shared resource cleanup。",
+          "lines": "1-150",
+          "concept": "C-IPC"
+        }
+      ]
+    },
+    {
+      "group": "IPC",
+      "path": "src/unilab/ipc/{shared_buffer,replay_buffer,rollout_ring_buffer,weight_sync}.py",
+      "color": "#0891b2",
+      "blocks": [
+        {
+          "id": "U-I-02",
+          "role": "CPU collector 到 learner 的传输层。承载 shared replay buffer、rollout ring、obs stats、权重同步和内存预算。",
+          "lines": "shared_buffer.py:6-90; replay_buffer.py:11-140; rollout_ring_buffer.py:26-220; weight_sync.py:15-120",
+          "concept": "C-IPC"
+        }
+      ]
+    },
+    {
+      "group": "Training Support",
+      "path": "src/unilab/training/*",
+      "color": "#0f766e",
+      "blocks": [
+        {
+          "id": "U-S-01",
+          "role": "训练共享服务。提供 BackendAdapter、create_env、seed、experiment tracker、checkpoint 解析、sim2sim guard 和 reward helpers。",
+          "lines": "backend_adapter.py:15-170; common.py:99-150 create_env; run.py:16-110 playback/log roots; experiment.py:172-280 tracker; sim2sim.py:1-160 guards",
+          "concept": "C-OBS"
+        }
+      ]
+    },
+    {
+      "group": "Assets / Tools",
+      "path": "src/unilab/assets/* / tools/* / visualization/* / demo.py",
+      "color": "#9333ea",
+      "blocks": [
+        {
+          "id": "U-X-01",
+          "role": "资产、可视化与工具层。管理 robot/object XML/mesh/cache、demo 预设、导入导出、回放、批量渲染和 NaN 可视化。",
+          "lines": "assets/hub.py:1-120; demo.py:304-380 run_demo; tools/import_robot.py:1-180; tools/export_scene.py:1-160; visualization/playback.py:1-160",
+          "concept": "C-ASSET"
+        }
+      ]
+    },
+    {
+      "group": "Verification",
+      "path": "tests/ benchmark/ docs/sphinx/source/adr/*",
+      "color": "#64748b",
+      "blocks": [
+        {
+          "id": "U-V-01",
+          "role": "验证与架构记忆。tests 约束 contract，benchmark 量化后端/IPC/算法性能，ADR 固化运行时边界决策。",
+          "lines": "tests/: contract tests by feature; benchmark/core/runner.py:1-180; benchmark/benchmark_*.py:1-120; docs/sphinx/source/adr/ADR-0001-runtime-model-and-layer-boundaries.md:1-60",
+          "concept": "C-CONFIG"
+        }
+      ]
+    }
+  ]
+}

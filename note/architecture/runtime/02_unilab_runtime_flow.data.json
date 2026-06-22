@@ -1,0 +1,195 @@
+{
+  "title": "UniLab Runtime Contract Map",
+  "subtitle": "CPU Physics -> Collector/IPC -> GPU Learner boundary map for UniLab.",
+  "layout": "flow_tree",
+  "concepts": {
+    "C-ENTRY": {
+      "name": "CLI and script assembly",
+      "color": "#475569"
+    },
+    "C-CONFIG": {
+      "name": "Hydra task-owner config",
+      "color": "#2563eb"
+    },
+    "C-REGISTRY": {
+      "name": "environment registry contract",
+      "color": "#7c3aed"
+    },
+    "C-BACKEND": {
+      "name": "simulation backend abstraction",
+      "color": "#059669"
+    },
+    "C-ENV": {
+      "name": "robot task environments",
+      "color": "#d97706"
+    },
+    "C-ALGO": {
+      "name": "policy learning runtimes",
+      "color": "#dc2626"
+    },
+    "C-IPC": {
+      "name": "collector IPC and replay transport",
+      "color": "#0891b2"
+    },
+    "C-DIAG": {
+      "name": "logging, playback, verification",
+      "color": "#64748b"
+    }
+  },
+  "nodes": [
+    {
+      "id": "U-E-01",
+      "title": "unilab CLI chooses route",
+      "role": "用户入口与路由边界。",
+      "input": "train/eval/demo 参数、algo、task、sim、profile、render-mode、Hydra passthrough overrides。",
+      "output": "具体训练脚本、config group、task owner YAML、生成的 Hydra overrides、运行 Python。",
+      "forbidden": "不能让 algo/task/sim 这种路由字段从任意 passthrough override 偷偷改写。",
+      "diagnostic": "CLI 参数校验、entrypoint script exists、owner YAML exists、Motrix/MLX runtime requirement check。",
+      "concept": "C-ENTRY",
+      "children": [
+        {
+          "id": "U-E-02",
+          "title": "training script assembles run",
+          "role": "Hydra 装配层。",
+          "input": "resolved cfg、route overrides、checkpoint/load-run、playback/render policy。",
+          "output": "env cfg override、runner kwargs、log root、experiment tracker、playback plan。",
+          "forbidden": "scripts/ 不承载长期业务规则；不能绕过 registry 或 backend contract 直接依赖具体后端实现。",
+          "diagnostic": "resolved config、log dir、resume path、playback messages、failure summary。",
+          "concept": "C-ENTRY",
+          "children": [
+            {
+              "id": "U-C-01",
+              "title": "Hydra resolves algorithm config",
+              "role": "算法与训练默认值所有者。",
+              "input": "conf/<algo>/config.yaml、CLI generated overrides、user passthrough overrides。",
+              "output": "training device/logging/play-only、algo runner/learner hyperparameters。",
+              "forbidden": "不能在 task owner 外隐式选择不匹配的 backend/task variant。",
+              "diagnostic": "OmegaConf resolved cfg、reserved override guard、offpolicy task-choice assertion。",
+              "concept": "C-CONFIG"
+            },
+            {
+              "id": "U-C-02",
+              "title": "Task owner YAML selects env/backend",
+              "role": "任务归属配置边界。",
+              "input": "conf/*/task/<task>/<backend>.yaml 或 profile variant。",
+              "output": "training.task_name、training.sim_backend、env overrides、reward/DR/scene/task-specific knobs。",
+              "forbidden": "不能把 backend 切换散落到脚本条件分支；同一 task 的 mujoco/motrix 差异应由 owner config 表达。",
+              "diagnostic": "owner YAML path check、support matrix/docs、config review。",
+              "concept": "C-CONFIG",
+              "children": [
+                {
+                  "id": "U-R-01",
+                  "title": "registry.make constructs environment",
+                  "role": "task 构造入口 contract。",
+                  "input": "task name、sim_backend、EnvCfg override、num_envs。",
+                  "output": "实现 ABEnv/NpEnv contract 的具体环境实例。",
+                  "forbidden": "算法和脚本不能直接 import 某个任务类来绕开注册表。",
+                  "diagnostic": "unknown task/backend errors、available backend listing、dataclass field validation。",
+                  "concept": "C-REGISTRY",
+                  "children": [
+                    {
+                      "id": "U-B-01",
+                      "title": "SimBackend normalizes physics",
+                      "role": "物理后端抽象边界。",
+                      "input": "robot XML/scene、num_envs、backend-specific model/runtime state。",
+                      "output": "统一的 model/state/step/body ids/control range/DR/playback capabilities。",
+                      "forbidden": "env 以上的层不能依赖 mujoco/motrix 私有状态布局。",
+                      "diagnostic": "backend capability methods、render plan、state shape checks、backend-specific tests。",
+                      "concept": "C-BACKEND",
+                      "children": [
+                        {
+                          "id": "U-B-02",
+                          "title": "MuJoCo backend",
+                          "role": "MuJoCo/MuJoCoUni 适配实现。",
+                          "input": "MuJoCo XML、model/data、persistent batched runtime primitives。",
+                          "output": "满足 SimBackend 的 MuJoCo state stepping and playback。",
+                          "forbidden": "不能把 MuJoCo-only API 泄漏到算法 runner。",
+                          "diagnostic": "MuJoCo backend smoke tests、benchmark_mujoco_*、backend support docs。",
+                          "concept": "C-BACKEND"
+                        },
+                        {
+                          "id": "U-B-03",
+                          "title": "Motrix backend",
+                          "role": "MotrixSim 适配实现。",
+                          "input": "Motrix scene、native renderer、Motrix runtime state。",
+                          "output": "满足 SimBackend 的 Motrix state stepping and native playback。",
+                          "forbidden": "不能要求非 Motrix 路径具备 native renderer。",
+                          "diagnostic": "Motrix import/runtime checks、mxpython routing、record/interactive playback plan。",
+                          "concept": "C-BACKEND"
+                        }
+                      ]
+                    },
+                    {
+                      "id": "U-T-01",
+                      "title": "Robot task env owns rewards and observations",
+                      "role": "任务语义所有者。",
+                      "input": "EnvCfg、SimBackend、robot assets、commands、terrain、DR providers。",
+                      "output": "obs_dict、reward terms、done/reset info、action_space/observation_space、optional symmetry augmentation。",
+                      "forbidden": "后端只负责物理 contract；不能拥有任务 reward 或 policy observation 语义。",
+                      "diagnostic": "obs group spec、reward logs、domain randomization payloads、task tests。",
+                      "concept": "C-ENV"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "U-A-01",
+              "title": "Algorithm runtime builds learner/runner",
+              "role": "策略学习运行时边界。",
+              "input": "env specs、algo config、device、num_envs、steps_per_env、checkpoint/resume state。",
+              "output": "PPO/APPO/SAC/TD3/FlashSAC/HORA/HIM/MLX learner and runner loop。",
+              "forbidden": "算法不能重新定义 env reset/step/obs contract；只能消费 registry/env 暴露出的规范接口。",
+              "diagnostic": "runner kwargs、model dim guard、checkpoint load status、learner metrics。",
+              "concept": "C-ALGO",
+              "children": [
+                {
+                  "id": "U-I-01",
+                  "title": "AsyncRunner starts CPU collectors",
+                  "role": "异步采集生命周期。",
+                  "input": "env name、env cfg overrides、collector device、sim backend、num_envs、stop event。",
+                  "output": "collector subprocess、error pipe、shared resources、cleanup boundary。",
+                  "forbidden": "不能让 collector 异常静默死亡；不能遗留 shared memory/resource。",
+                  "diagnostic": "collector_error_guard、exitcode/traceback report、close() cleanup messages。",
+                  "concept": "C-IPC",
+                  "children": [
+                    {
+                      "id": "U-I-02",
+                      "title": "Replay transport bridges CPU physics to GPU learner",
+                      "role": "transition 传输层。",
+                      "input": "collector rollout、obs/action/reward/done、policy weights、obs stats。",
+                      "output": "shared replay buffer、rollout ring、weight sync、learner minibatches。",
+                      "forbidden": "不能在传输层改变 reward/obs 语义；只能移动和同步数据。",
+                      "diagnostic": "memory budget, IPC benchmarks, shared buffer layout tests, transfer backend metrics。",
+                      "concept": "C-IPC"
+                    }
+                  ]
+                },
+                {
+                  "id": "U-A-02",
+                  "title": "Learner updates policy on accelerator",
+                  "role": "GPU/MPS/ROCm/XPU 学习边界。",
+                  "input": "minibatches or rollouts、actor/critic networks、optimizer config、mixed precision/compile flags。",
+                  "output": "updated policy weights、checkpoint、training metrics、new weights for collectors。",
+                  "forbidden": "不能直接控制 backend state；对环境的唯一交互应经 runner/collector contract。",
+                  "diagnostic": "loss metrics、fps/sample throughput、checkpoint files、W&B/logging summaries。",
+                  "concept": "C-ALGO"
+                }
+              ]
+            },
+            {
+              "id": "U-D-01",
+              "title": "Playback, docs, tests, benchmarks prove contract",
+              "role": "验证与可观察性出口。",
+              "input": "trained checkpoints、run logs、backend playback plan、tests/benchmarks/docs ADR。",
+              "output": "interactive/recorded playback、support matrix、CI signal、performance profiles、architecture decisions。",
+              "forbidden": "不能用一次 smoke run 代替 contract 测试；不能让文档与 owner config 支持矩阵分叉。",
+              "diagnostic": "tests/, benchmark/, docs/sphinx/source/adr, generated backend support docs, demo commands。",
+              "concept": "C-DIAG"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>UniLab Architecture Snapshot</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 42px;
+      background: #fbfaf4;
+      color: #1f2933;
+      font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: 34px;
+      letter-spacing: 0;
+    }
+
+    p {
+      color: #5d6976;
+      max-width: 780px;
+      line-height: 1.6;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 18px;
+      max-width: 1120px;
+      margin-top: 28px;
+    }
+
+    a {
+      display: block;
+      min-height: 138px;
+      padding: 22px;
+      color: inherit;
+      text-decoration: none;
+      background: #fffdf6;
+      border: 1px solid #d9d2c3;
+      border-radius: 8px;
+      box-shadow: 0 10px 24px rgba(31, 41, 51, 0.06);
+    }
+
+    a strong {
+      display: block;
+      margin-bottom: 12px;
+      font-size: 20px;
+    }
+
+    a span {
+      color: #5d6976;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <h1>UniLab Architecture Snapshot</h1>
+  <p>
+    These maps are meant to be read side by side with code. They share Code Block IDs and concept colors, so a runtime idea can be traced from file ownership to interface boundary.
+  </p>
+  <section class="grid">
+    <a href="./auxiliary/atlas_app/architecture_atlas.html?data=../../architecture/01_unilab_repo_architecture.data.json">
+      <strong>01 UniLab Repo Architecture</strong>
+      <span>Ownership map for UniLab CLI, Hydra configs, registry, backend, env, algorithm, IPC, and asset layers.</span>
+    </a>
+    <a href="./auxiliary/atlas_app/architecture_atlas.html?data=../../runtime/02_unilab_runtime_flow.data.json">
+      <strong>02 UniLab Runtime Contract Map</strong>
+      <span>Boundary map for CPU physics, collector/IPC transport, and accelerator learner flow.</span>
+    </a>
+  </section>
+</body>
+</html>

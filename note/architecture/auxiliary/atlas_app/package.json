@@ -1,0 +1,14 @@
+{
+  "name": "mosaic-architecture-atlas",
+  "version": "1.0.0",
+  "description": "Human-readable FrontRES architecture maps rendered with rough.js.",
+  "private": true,
+  "type": "module",
+  "main": "serve_architecture.mjs",
+  "scripts": {
+    "serve": "node serve_architecture.mjs"
+  },
+  "dependencies": {
+    "roughjs": "^4.6.6"
+  }
+}
