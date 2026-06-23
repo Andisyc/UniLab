@@ -15,6 +15,10 @@ algo:
 env:
   control_config:
     action_scale: 1.0
+  commands:
+    vel_limit:
+      - [0.2, -0.2, -0.4]
+      - [0.8, 0.2, 0.4]
   gait_phase_init_mode: "offset_phase"
   reset_base_qvel_limit: 0.5
   curriculum:
@@ -36,13 +40,16 @@ reward:
   scales:
     tracking_lin_vel: 2.0
     tracking_ang_vel: 1.5
+    under_speed: -0.5
     penalty_ang_vel_xy: -1.0
     penalty_orientation: -10.0
     penalty_action_rate: -4.0
     pose: -0.5
     penalty_feet_ori: -20.0
-    feet_phase: 5.0
-    alive: 10.0
+    feet_phase: 0.0
+    feet_phase_contrast: 0.0
+    feet_phase_contact: 0.0
+    alive: 2.0
   tracking_sigma: 0.25
   base_height_target: 0.754
   min_base_height: 0.3
@@ -51,4 +58,15 @@ reward:
   feet_phase_swing_height: 0.09
   feet_phase_tracking_sigma: 0.04
   close_feet_threshold: 0.15
+  gait_constraint:
+    enabled: true
+    command_xy_threshold: 0.05
+    command_yaw_threshold: 0.05
+    height_weight: 1.0
+    contrast_weight: 1.0
+    contact_weight: 0.25
+    epsilon: 0.02
+    penalty_scale: 0.5
+    apply_in_stand_mode: false
+    apply_when_tracking: false
   pose_weights: [0.01, 1.0, 5.0, 0.01, 5.0, 5.0, 0.01, 1.0, 5.0, 0.01, 5.0, 5.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0]

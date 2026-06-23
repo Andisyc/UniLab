@@ -129,6 +129,82 @@ def compute_forward_command_mask(commands: np.ndarray) -> np.ndarray:
     return np.asarray(np.maximum(commands[:, 0], 0.0) > 1.0e-6, dtype=get_global_dtype())
 
 
+def compute_command_active_mask(
+    commands: np.ndarray, *, xy_threshold: float, yaw_threshold: float
+) -> np.ndarray:
+    xy_norm = np.linalg.norm(commands[:, :2], axis=1)
+    yaw_abs = np.abs(commands[:, 2])
+    return np.asarray(
+        (xy_norm > xy_threshold) | (yaw_abs > yaw_threshold), dtype=get_global_dtype()
+    )
+
+
+def compute_tracking_gate(
+    commands: np.ndarray,
+    linvel: np.ndarray,
+    gyro: np.ndarray,
+    *,
+    tracking_sigma: float,
+    threshold: float,
+) -> np.ndarray:
+    lin_error = np.sum(np.square(commands[:, :2] - linvel[:, :2]), axis=1)
+    yaw_error = np.square(commands[:, 2] - gyro[:, 2])
+    tracking_score = np.exp(-(lin_error + yaw_error) / tracking_sigma)
+    return np.asarray(tracking_score > threshold, dtype=get_global_dtype())
+
+
+def compute_gait_phase_height_violation(
+    left_foot_z: np.ndarray,
+    right_foot_z: np.ndarray,
+    gait_phase: np.ndarray,
+    swing_height: float,
+) -> np.ndarray:
+    left_target, right_target = compute_feet_phase_height_targets(gait_phase, swing_height)
+    return np.asarray(
+        np.square(left_foot_z - left_target) + np.square(right_foot_z - right_target),
+        dtype=get_global_dtype(),
+    )
+
+
+def compute_gait_phase_contrast_violation(
+    left_foot_z: np.ndarray,
+    right_foot_z: np.ndarray,
+    gait_phase: np.ndarray,
+    swing_height: float,
+) -> np.ndarray:
+    left_target, right_target = compute_feet_phase_height_targets(gait_phase, swing_height)
+    actual_delta = left_foot_z - right_foot_z
+    target_delta = left_target - right_target
+    return np.asarray(np.square(actual_delta - target_delta), dtype=get_global_dtype())
+
+
+def compute_gait_phase_contact_violation(
+    left_contact: np.ndarray,
+    right_contact: np.ndarray,
+    gait_phase: np.ndarray,
+    swing_height: float,
+) -> np.ndarray:
+    left_target, right_target = compute_feet_phase_contact_targets(gait_phase, swing_height)
+    left_error = np.asarray(left_contact != left_target, dtype=get_global_dtype())
+    right_error = np.asarray(right_contact != right_target, dtype=get_global_dtype())
+    return np.asarray(0.5 * (left_error + right_error), dtype=get_global_dtype())
+
+
+@dataclass
+class GaitConstraintConfig:
+    enabled: bool = False
+    command_xy_threshold: float = 0.05
+    command_yaw_threshold: float = 0.05
+    height_weight: float = 1.0
+    contrast_weight: float = 1.0
+    contact_weight: float = 1.0
+    epsilon: float = 0.02
+    penalty_scale: float = 1.0
+    apply_in_stand_mode: bool = False
+    apply_when_tracking: bool = False
+    tracking_threshold: float = 0.3
+
+
 @dataclass
 class G1RewardConfig:
     scales: dict[str, float]
@@ -141,6 +217,9 @@ class G1RewardConfig:
     max_tilt_deg: float
     min_forward_speed_for_gait_reward: float = 0.0
     close_feet_threshold: float = 0.15
+    gait_constraint: GaitConstraintConfig | dict[str, Any] = field(
+        default_factory=GaitConstraintConfig
+    )
     pose_weights: list[float] = field(
         default_factory=lambda: [
             0.01,
@@ -174,6 +253,10 @@ class G1RewardConfig:
             50.0,
         ]
     )
+
+    def __post_init__(self) -> None:
+        if isinstance(self.gait_constraint, dict):
+            self.gait_constraint = GaitConstraintConfig(**self.gait_constraint)
 
 
 @dataclass
@@ -514,7 +597,7 @@ class G1WalkEnv(G1BaseEnv):
     def _compute_reward(self, info: dict, linvel, gyro, gravity, dof_pos, dof_vel) -> np.ndarray:
         cfg = self._reward_cfg
         ctx = self._build_reward_context(info, linvel, gyro, gravity, dof_pos, dof_vel)
-        return rewards.run_reward_dispatch(
+        reward = rewards.run_reward_dispatch(
             scales=cfg.scales,
             fns=self._reward_fns,
             ctx=ctx,
@@ -522,6 +605,98 @@ class G1WalkEnv(G1BaseEnv):
             enable_log=self._enable_reward_log,
             ctrl_dt=self._cfg.ctrl_dt,
         )
+        return self._apply_gait_constraint_bridge(ctx, reward)
+
+    def _apply_gait_constraint_bridge(
+        self, ctx: RewardContext, reward: np.ndarray
+    ) -> np.ndarray:
+        cfg = self._reward_cfg.gait_constraint
+        if isinstance(cfg, dict):
+            cfg = GaitConstraintConfig(**cfg)
+            self._reward_cfg.gait_constraint = cfg
+        if not cfg.enabled:
+            return reward
+
+        components = self._compute_gait_constraint_components(ctx, cfg)
+        excess = np.maximum(components["total"] - cfg.epsilon, 0.0)
+        gated_cost = excess * components["gate"]
+        self._log_gait_constraint(ctx.info, components, gated_cost)
+        return np.asarray(
+            reward - cfg.penalty_scale * gated_cost * self._cfg.ctrl_dt,
+            dtype=get_global_dtype(),
+        )
+
+    def _compute_gait_constraint_components(
+        self, ctx: RewardContext, cfg: GaitConstraintConfig
+    ) -> dict[str, np.ndarray]:
+        left_foot = self._backend.get_sensor_data("left_foot_pos")
+        right_foot = self._backend.get_sensor_data("right_foot_pos")
+        gait_phase = ctx.info.get(
+            "gait_phase", np.zeros((self._num_envs, 2), dtype=get_global_dtype())
+        )
+        swing_height = self._reward_cfg.feet_phase_swing_height
+        height = compute_gait_phase_height_violation(
+            left_foot[:, 2], right_foot[:, 2], gait_phase, swing_height
+        )
+        contrast = compute_gait_phase_contrast_violation(
+            left_foot[:, 2], right_foot[:, 2], gait_phase, swing_height
+        )
+        left_contact = compute_aggregated_foot_contact(self._backend, LEFT_FOOT_CONTACT_SENSORS)
+        right_contact = compute_aggregated_foot_contact(self._backend, RIGHT_FOOT_CONTACT_SENSORS)
+        contact = compute_gait_phase_contact_violation(
+            left_contact, right_contact, gait_phase, swing_height
+        )
+        total = np.asarray(
+            cfg.height_weight * height
+            + cfg.contrast_weight * contrast
+            + cfg.contact_weight * contact,
+            dtype=get_global_dtype(),
+        )
+
+        commands = ctx.info.get("commands", np.zeros((self._num_envs, 3), dtype=get_global_dtype()))
+        command_active = compute_command_active_mask(
+            commands,
+            xy_threshold=cfg.command_xy_threshold,
+            yaw_threshold=cfg.command_yaw_threshold,
+        )
+        gate = (
+            np.ones_like(command_active, dtype=get_global_dtype())
+            if cfg.apply_in_stand_mode
+            else command_active
+        )
+        if cfg.apply_when_tracking:
+            gate = gate * compute_tracking_gate(
+                commands,
+                ctx.linvel,
+                ctx.gyro,
+                tracking_sigma=self._reward_cfg.tracking_sigma,
+                threshold=cfg.tracking_threshold,
+            )
+
+        return {
+            "height": height,
+            "contrast": contrast,
+            "contact": contact,
+            "total": total,
+            "gate": np.asarray(gate, dtype=get_global_dtype()),
+            "command_active": command_active,
+        }
+
+    def _log_gait_constraint(
+        self, info: dict, components: dict[str, np.ndarray], gated_cost: np.ndarray
+    ) -> None:
+        step_count = info.get("steps", np.zeros((self._num_envs,), dtype=np.uint32))
+        if not self._enable_reward_log or int(step_count[0]) % 4 != 0:
+            return
+        log = info.get("log", {})
+        log["constraint/gait_height"] = float(np.mean(components["height"]))
+        log["constraint/gait_contrast"] = float(np.mean(components["contrast"]))
+        log["constraint/gait_contact"] = float(np.mean(components["contact"]))
+        log["constraint/gait_total"] = float(np.mean(components["total"]))
+        log["constraint/gait_gated_cost"] = float(np.mean(gated_cost))
+        log["mode/command_active"] = float(np.mean(components["command_active"]))
+        log["mode/gait_constraint_gate"] = float(np.mean(components["gate"]))
+        info["log"] = log
 
     def _reward_feet_phase(self, ctx: RewardContext):
         """Reward gait phase tracking by encouraging the expected swing-foot height."""

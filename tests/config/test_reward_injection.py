@@ -13,8 +13,11 @@ def test_reward_config_loading_g1():
         cfg = compose(config_name="config", overrides=["task=sac/g1_walk_flat/mujoco"])
         assert hasattr(cfg, "reward")
         assert cfg.reward.scales.tracking_lin_vel == 2.0
-        assert cfg.reward.scales.alive == 10.0
+        assert cfg.reward.scales.feet_phase == 0.0
+        assert cfg.reward.scales.alive == 2.0
         assert cfg.reward.base_height_target == 0.754
+        assert cfg.reward.gait_constraint.enabled is True
+        assert cfg.env.commands.vel_limit[0] == [0.2, -0.2, -0.4]
 
 
 def test_reward_config_loading_g1_motrix():
