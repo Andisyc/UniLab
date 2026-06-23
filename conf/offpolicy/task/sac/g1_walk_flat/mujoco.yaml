@@ -17,8 +17,10 @@ env:
     action_scale: 1.0
   commands:
     vel_limit:
-      - [0.2, -0.2, -0.4]
+      - [-0.3, -0.2, -0.4]
       - [0.8, 0.2, 0.4]
+    rel_standing_envs: 0.2
+    small_xy_threshold: 0.05
   gait_phase_init_mode: "offset_phase"
   reset_base_qvel_limit: 0.5
   curriculum:
@@ -44,6 +46,9 @@ reward:
     penalty_ang_vel_xy: -1.0
     penalty_orientation: -10.0
     penalty_action_rate: -4.0
+    stand_still: -2.0
+    stand_action_l2: -0.2
+    stand_dof_vel_l2: -0.05
     pose: -0.5
     penalty_feet_ori: -20.0
     feet_phase: 0.0
@@ -69,4 +74,6 @@ reward:
     penalty_scale: 0.5
     apply_in_stand_mode: false
     apply_when_tracking: false
-  pose_weights: [0.01, 1.0, 5.0, 0.01, 5.0, 5.0, 0.01, 1.0, 5.0, 0.01, 5.0, 5.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0]
+    freeze_phase_in_stand_mode: true
+    stand_phase: [0.0, 3.141592653589793]
+  pose_weights: [0.01, 1.0, 0.2, 0.01, 5.0, 5.0, 0.01, 1.0, 0.2, 0.01, 5.0, 5.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0]

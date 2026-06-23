@@ -203,6 +203,8 @@ class GaitConstraintConfig:
     apply_in_stand_mode: bool = False
     apply_when_tracking: bool = False
     tracking_threshold: float = 0.3
+    freeze_phase_in_stand_mode: bool = False
+    stand_phase: list[float] = field(default_factory=lambda: [0.0, math.pi])
 
 
 @dataclass
@@ -311,7 +313,10 @@ class G1WalkDomainRandomizationProvider(LocomotionDRProvider):
 
     def _sample_commands(self, env: Any, num_reset: int) -> np.ndarray:
         commands = super()._sample_commands(env, num_reset)
-        zero_small_xy_commands(commands)
+        zero_small_xy_commands(
+            commands,
+            threshold=float(getattr(env.cfg.commands, "small_xy_threshold", 0.2)),
+        )
         standing_prob = float(getattr(env.cfg.commands, "rel_standing_envs", 0.0))
         if standing_prob > 0.0:
             standing = np.random.uniform(size=(num_reset,)) < min(standing_prob, 1.0)
@@ -418,6 +423,9 @@ class G1WalkEnv(G1BaseEnv):
             "upper_body_pose": self._reward_upper_body_pose,
             "penalty_close_feet_xy": self._reward_close_feet_xy,
             "penalty_feet_ori": self._reward_feet_ori,
+            "stand_still": self._reward_stand_still,
+            "stand_action_l2": self._reward_stand_action_l2,
+            "stand_dof_vel_l2": self._reward_stand_dof_vel_l2,
             "feet_phase": self._reward_feet_phase,
             "feet_phase_contrast": self._reward_feet_phase_contrast,
             "feet_phase_contact": self._reward_feet_phase_contact,
@@ -473,7 +481,7 @@ class G1WalkEnv(G1BaseEnv):
         diff = dof_pos - self.default_angles
         command = info["commands"]
         last_actions = info.get("current_actions", np.zeros_like(diff))
-        gait_phase = info.get("gait_phase", np.zeros((self._num_envs, 2), dtype=get_global_dtype()))
+        gait_phase = self._gait_phase_for_observation(info)
         walk_profile = self._uses_walk_observation_profile()
 
         noisy_gyro = self._obs_noise(gyro, noise_cfg.scale_gyro)
@@ -523,6 +531,43 @@ class G1WalkEnv(G1BaseEnv):
         )
 
         return {"obs": actor, "critic": critic}
+
+    def _gait_constraint_cfg(self) -> GaitConstraintConfig:
+        cfg = self._reward_cfg.gait_constraint
+        if isinstance(cfg, dict):
+            cfg = GaitConstraintConfig(**cfg)
+            self._reward_cfg.gait_constraint = cfg
+        return cfg
+
+    def _command_active_mask(self, info: dict) -> np.ndarray:
+        commands = info.get("commands", np.zeros((self._num_envs, 3), dtype=get_global_dtype()))
+        cfg = self._gait_constraint_cfg()
+        return compute_command_active_mask(
+            commands,
+            xy_threshold=cfg.command_xy_threshold,
+            yaw_threshold=cfg.command_yaw_threshold,
+        )
+
+    def _stand_phase_array(self) -> np.ndarray:
+        cfg = self._gait_constraint_cfg()
+        stand_phase = np.asarray(cfg.stand_phase, dtype=get_global_dtype())
+        if stand_phase.shape != (2,):
+            raise ValueError(f"gait_constraint.stand_phase must have shape (2,), got {stand_phase}")
+        return stand_phase
+
+    def _gait_phase_for_observation(self, info: dict) -> np.ndarray:
+        gait_phase = np.asarray(
+            info.get("gait_phase", np.zeros((self._num_envs, 2), dtype=get_global_dtype())),
+            dtype=get_global_dtype(),
+        )
+        cfg = self._gait_constraint_cfg()
+        if not (cfg.enabled and cfg.freeze_phase_in_stand_mode):
+            return gait_phase
+        active = self._command_active_mask(info).astype(bool)
+        stand_phase = self._stand_phase_array()
+        return np.asarray(
+            np.where(active[:, None], gait_phase, stand_phase[None, :]), dtype=get_global_dtype()
+        )
 
     def _uses_walk_observation_profile(self) -> bool:
         scales = getattr(getattr(self, "_reward_cfg", None), "scales", None)
@@ -610,10 +655,7 @@ class G1WalkEnv(G1BaseEnv):
     def _apply_gait_constraint_bridge(
         self, ctx: RewardContext, reward: np.ndarray
     ) -> np.ndarray:
-        cfg = self._reward_cfg.gait_constraint
-        if isinstance(cfg, dict):
-            cfg = GaitConstraintConfig(**cfg)
-            self._reward_cfg.gait_constraint = cfg
+        cfg = self._gait_constraint_cfg()
         if not cfg.enabled:
             return reward
 
@@ -783,6 +825,24 @@ class G1WalkEnv(G1BaseEnv):
         in_range = (air_time > 0.05) & (air_time < 0.5)
         return np.sum(in_range.astype(float), axis=1)
 
+    def _stand_mode_mask(self, ctx: RewardContext) -> np.ndarray:
+        return np.asarray(1.0 - self._command_active_mask(ctx.info), dtype=get_global_dtype())
+
+    def _reward_stand_still(self, ctx: RewardContext):
+        diff = ctx.dof_pos - self.default_angles
+        return np.asarray(np.sum(np.abs(diff), axis=1) * self._stand_mode_mask(ctx), dtype=get_global_dtype())
+
+    def _reward_stand_action_l2(self, ctx: RewardContext):
+        actions = ctx.info.get("current_actions", np.zeros_like(ctx.dof_pos))
+        return np.asarray(np.sum(np.square(actions), axis=1) * self._stand_mode_mask(ctx), dtype=get_global_dtype())
+
+    def _reward_stand_dof_vel_l2(self, ctx: RewardContext):
+        assert ctx.dof_vel is not None
+        return np.asarray(
+            np.sum(np.square(ctx.dof_vel), axis=1) * self._stand_mode_mask(ctx),
+            dtype=get_global_dtype(),
+        )
+
     def _reward_upper_body_pose(self, ctx: RewardContext):
         diff = ctx.dof_pos - self.default_angles
         return np.asarray(
@@ -797,8 +857,19 @@ class G1WalkEnv(G1BaseEnv):
         gait_phase = state.info.get(
             "gait_phase", np.zeros((self._num_envs, 2), dtype=get_global_dtype())
         )
-        gait_phase[:, 0] = (gait_phase[:, 0] + self._gait_phase_delta) % (2 * np.pi)
-        gait_phase[:, 1] = (gait_phase[:, 1] + self._gait_phase_delta) % (2 * np.pi)
+        cfg = self._gait_constraint_cfg()
+        if cfg.enabled and cfg.freeze_phase_in_stand_mode:
+            active = self._command_active_mask(state.info).astype(bool)
+            gait_phase[active, 0] = (gait_phase[active, 0] + self._gait_phase_delta) % (
+                2 * np.pi
+            )
+            gait_phase[active, 1] = (gait_phase[active, 1] + self._gait_phase_delta) % (
+                2 * np.pi
+            )
+            gait_phase[~active, :] = self._stand_phase_array()
+        else:
+            gait_phase[:, 0] = (gait_phase[:, 0] + self._gait_phase_delta) % (2 * np.pi)
+            gait_phase[:, 1] = (gait_phase[:, 1] + self._gait_phase_delta) % (2 * np.pi)
         state.info["gait_phase"] = gait_phase
 
         ctrl: np.ndarray = actions * self._cfg.control_config.action_scale + self.default_angles

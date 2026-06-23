@@ -22,6 +22,7 @@ class Commands:
     heading_range: list[float] = field(default_factory=lambda: [-3.14, 3.14])
     heading_control_stiffness: float = 0.5
     rel_standing_envs: float = 0.0
+    small_xy_threshold: float = 0.2
 
 
 def sample_velocity_commands(

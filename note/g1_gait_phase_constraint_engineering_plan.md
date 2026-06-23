@@ -445,3 +445,30 @@ Current implementation is therefore a validated bridge, not the final constraine
 - Do not introduce asset/XML parsing in hot path.
 - Do not silently change standard FastSAC semantics for all tasks.
 - Do not make `actual_speed` the only gate for gait pressure.
+
+## 16. 2026-06-24 Stand/Low-Speed/Turn Follow-Up
+
+Training observation after the Phase 2 bridge:
+
+- In-place stepping is removed.
+- Zero command still produces standing jitter.
+- Visible stepping appears only for larger forward commands, around `0.5 m/s`.
+- Turning has a waist/upper-body-first tendency.
+- Backward walking is out of distribution and falls after a few steps.
+
+Interpretation:
+
+- The previous fix removed gait reward hacking but did not define a separate stand mode.
+- The SAC command range `[0.2, 0.8]` makes low joystick increments near or outside the training distribution.
+- G1 command sampling still zeroes small xy commands with the old `0.2` threshold, which removes low-speed walking examples.
+- Hip yaw is part of the leg pose prior. Penalizing it too strongly can make yaw tracking avoid the intended leg yaw freedom and use upper-body/base alternatives.
+- Backward commands require either an explicit "unsupported" deployment boundary or a training distribution that includes negative `vx`.
+
+Engineering follow-up:
+
+- Add a command sampling threshold field so G1 can keep low-speed command samples.
+- Add stand-mode samples through `commands.rel_standing_envs`.
+- Freeze gait phase while command is inactive so zero-command observations are not driven by a moving phase signal.
+- Add stand-mode rewards/penalties for joint deviation, action magnitude, and joint velocity.
+- Reduce hip yaw pose weights in the active SAC G1 config so turning can use leg yaw before waist/upper-body twist.
+- Include modest negative `vx` samples for initial backward support, but treat backward stability as a separate diagnostic.
