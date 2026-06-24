@@ -14,16 +14,25 @@ def test_reward_config_loading_g1():
         assert hasattr(cfg, "reward")
         assert cfg.reward.scales.tracking_lin_vel == 2.0
         assert cfg.reward.scales.feet_phase == 0.0
+        assert cfg.reward.scales.feet_phase_contrast == 0.0
+        assert cfg.reward.scales.feet_phase_contact == 0.0
         assert cfg.reward.scales.alive == 2.0
         assert cfg.reward.scales.stand_still == -2.0
+        assert cfg.reward.scales.stand_action_l2 == -0.5
+        assert cfg.reward.scales.stand_dof_vel_l2 == -0.15
+        assert cfg.reward.tracking_sigma == 0.12
         assert cfg.reward.base_height_target == 0.754
         assert cfg.reward.gait_constraint.enabled is True
         assert cfg.reward.gait_constraint.freeze_phase_in_stand_mode is True
+        assert cfg.reward.gait_constraint.contrast_weight == 2.0
+        assert cfg.reward.gait_constraint.contact_weight == 1.0
+        assert cfg.reward.gait_constraint.epsilon == 0.0
+        assert cfg.reward.gait_constraint.penalty_scale == 2.0
         assert cfg.env.commands.vel_limit[0] == [-0.3, -0.2, -0.4]
         assert cfg.env.commands.small_xy_threshold == 0.05
         assert cfg.env.commands.rel_standing_envs == 0.2
-        assert cfg.reward.pose_weights[2] == 0.2
-        assert cfg.reward.pose_weights[8] == 0.2
+        assert cfg.reward.pose_weights[2] == 0.05
+        assert cfg.reward.pose_weights[8] == 0.05
 
 
 def test_reward_config_loading_g1_motrix():

@@ -472,3 +472,34 @@ Engineering follow-up:
 - Add stand-mode rewards/penalties for joint deviation, action magnitude, and joint velocity.
 - Reduce hip yaw pose weights in the active SAC G1 config so turning can use leg yaw before waist/upper-body twist.
 - Include modest negative `vx` samples for initial backward support, but treat backward stability as a separate diagnostic.
+
+## 17. 2026-06-24 Low-Speed Gait Authority Follow-Up
+
+Training observation after the stand/low-speed follow-up:
+
+- Zero command no longer falls, but still has small standing jitter.
+- Forward walking appears clearly only around `0.4 m/s`.
+- Backward walking starts earlier, around `0.2 m/s`.
+- Yaw commands also need around `0.2 rad/s` before visible turning.
+- Forward/backward and yaw behaviors can lose the intended alternating gait: one foot steps and the other follows.
+- Turning still has an upper-body-first tendency.
+- No falling is observed in this run.
+
+Interpretation:
+
+- Stability is no longer the primary blocker; the remaining issue is mode authority.
+- Stand mode is active, but the stand smoothness penalties are too weak to fully suppress small action and joint-velocity jitter.
+- `tracking_sigma=0.25` is too broad for low-speed joystick commands. At `0.1 m/s`, staying still is still rewarded too well, so the policy has little incentive to leave the stand basin.
+- The Phase 2 bridge made gait a negative constraint, which prevents in-place reward hacking, but it does not positively attract the policy toward a clean alternating gait.
+- The proper next move is not to restore positive `feet_phase*` rewards. That would reopen the original hacking channel.
+- Instead, strengthen the command-active gait violation cost, especially contrast/contact terms, so follow-step and upper-body-first turning become more expensive.
+- Hip yaw still appears underused; the pose prior should continue to avoid penalizing hip yaw as a default-pose deviation in this command-active locomotion regime.
+
+Engineering follow-up:
+
+- Narrow velocity tracking with `tracking_sigma=0.12` so low-speed command errors have meaningful reward gradient.
+- Strengthen stand smoothness penalties, especially action and joint velocity, while keeping stand pose deviation moderate to avoid suppressing takeoff.
+- Increase `gait_constraint.contrast_weight`, `contact_weight`, and `penalty_scale`; set `epsilon=0.0` so command-active gait errors are not ignored.
+- Keep positive `feet_phase*` rewards disabled.
+- Further relax hip-yaw pose weights to near zero in the active SAC G1 config.
+- Validate by config tests rather than a top-level script-only check, because this fix is an owner-YAML objective contract change.

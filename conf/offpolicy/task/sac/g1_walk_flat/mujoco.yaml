@@ -47,15 +47,15 @@ reward:
     penalty_orientation: -10.0
     penalty_action_rate: -4.0
     stand_still: -2.0
-    stand_action_l2: -0.2
-    stand_dof_vel_l2: -0.05
+    stand_action_l2: -0.5
+    stand_dof_vel_l2: -0.15
     pose: -0.5
     penalty_feet_ori: -20.0
     feet_phase: 0.0
     feet_phase_contrast: 0.0
     feet_phase_contact: 0.0
     alive: 2.0
-  tracking_sigma: 0.25
+  tracking_sigma: 0.12
   base_height_target: 0.754
   min_base_height: 0.3
   max_tilt_deg: 65.0
@@ -68,12 +68,12 @@ reward:
     command_xy_threshold: 0.05
     command_yaw_threshold: 0.05
     height_weight: 1.0
-    contrast_weight: 1.0
-    contact_weight: 0.25
-    epsilon: 0.02
-    penalty_scale: 0.5
+    contrast_weight: 2.0
+    contact_weight: 1.0
+    epsilon: 0.0
+    penalty_scale: 2.0
     apply_in_stand_mode: false
     apply_when_tracking: false
     freeze_phase_in_stand_mode: true
     stand_phase: [0.0, 3.141592653589793]
-  pose_weights: [0.01, 1.0, 0.2, 0.01, 5.0, 5.0, 0.01, 1.0, 0.2, 0.01, 5.0, 5.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0]
+  pose_weights: [0.01, 1.0, 0.05, 0.01, 5.0, 5.0, 0.01, 1.0, 0.05, 0.01, 5.0, 5.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0]
