@@ -525,3 +525,51 @@ Engineering follow-up:
 - Change the default and active SAC G1 `stand_phase` to `[pi, pi]`, so both feet map to stance/contact targets.
 - Add a unit test that proves the configured stand phase produces zero height targets and contact targets for both feet.
 - Keep the Section 17 low-speed gait authority changes in place unless the next training run shows a separate regression.
+
+## 19. 2026-06-24 Stand Mode Needs An Active Stance Constraint
+
+Training observation after Section 18:
+
+- The policy still learns in-place stepping after retraining.
+- The behavior looks similar to the original hacking mode.
+- This means the previous fix corrected the observation phase semantics, but did not remove the early-training oscillator attractor.
+
+Diagnosis:
+
+- A frozen double-stance observation is necessary but not sufficient.
+- Once a cyclic stepping policy is discovered early, action-history feedback and body-state feedback can sustain the oscillator even when the command is zero.
+- The stand-mode reward terms penalize action, joint velocity, and joint deviation, but they do not directly say "both feet must stay in stance/contact".
+- The gait constraint was explicitly disabled in stand mode (`apply_in_stand_mode: false`), so zero-command stepping did not pay the double-stance contact/height violation cost.
+- This is the missing boundary: gait is a locomotion structure in walk mode, but double-stance is a stance constraint in stand mode.
+
+Engineering follow-up:
+
+- Keep positive `feet_phase*` rewards disabled.
+- Keep `stand_phase: [pi, pi]`.
+- Enable `gait_constraint.apply_in_stand_mode` in the active SAC G1 owner config, so inactive-command samples enforce double stance/contact rather than merely hiding the walking phase.
+- Increase zero-command sampling pressure so the learner sees enough stand-mode evidence before the stepping oscillator becomes a default attractor.
+- Add tests showing that zero-command gait violation remains gated off by default, but the active SAC config enables stand-mode gait cost.
+
+## 20. 2026-06-24 Drift Is Unauthorized Locomotion
+
+Training observation after Section 19 reasoning:
+
+- The in-place stepping is not purely in-place.
+- The policy can add a small base drift while stepping, which makes the behavior resemble low-speed locomotion.
+- This drift can collect reward or avoid penalties while still violating the zero-command intent.
+
+Diagnosis:
+
+- Command is the only legitimate behavior-authority signal.
+- Actual base velocity is an outcome, not a mode selector.
+- If zero command produces nonzero base velocity, the correct interpretation is not "the robot is walking"; it is "stand mode has been violated".
+- Therefore actual velocity must never open the gait/walk gate. It can only serve as evidence for stand-mode anti-drift cost.
+- Existing tracking reward is too smooth near zero command; small drift does not lose enough reward to prevent the early-training oscillator from becoming an attractor.
+
+Engineering follow-up:
+
+- Add stand-only anti-drift penalties for base xy velocity and yaw velocity.
+- Gate these penalties only by command inactivity, not by measured speed.
+- Keep `tracking_lin_vel`, `tracking_ang_vel`, and gait constraint command-gated semantics unchanged.
+- Update the active SAC G1 owner config with strong enough anti-drift scales to make small zero-command drift more expensive than the tracking reward tolerance near zero.
+- Add tests proving that zero-command drift is penalized while the same measured velocity under a nonzero command is not treated as a stand violation.

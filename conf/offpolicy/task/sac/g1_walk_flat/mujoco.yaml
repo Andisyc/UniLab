@@ -19,7 +19,7 @@ env:
     vel_limit:
       - [-0.3, -0.2, -0.4]
       - [0.8, 0.2, 0.4]
-    rel_standing_envs: 0.2
+    rel_standing_envs: 0.4
     small_xy_threshold: 0.05
   gait_phase_init_mode: "offset_phase"
   reset_base_qvel_limit: 0.5
@@ -49,6 +49,8 @@ reward:
     stand_still: -2.0
     stand_action_l2: -0.5
     stand_dof_vel_l2: -0.15
+    stand_lin_vel_xy_l2: -30.0
+    stand_yaw_vel_l2: -10.0
     pose: -0.5
     penalty_feet_ori: -20.0
     feet_phase: 0.0
@@ -72,7 +74,7 @@ reward:
     contact_weight: 1.0
     epsilon: 0.0
     penalty_scale: 2.0
-    apply_in_stand_mode: false
+    apply_in_stand_mode: true
     apply_when_tracking: false
     freeze_phase_in_stand_mode: true
     stand_phase: [3.141592653589793, 3.141592653589793]

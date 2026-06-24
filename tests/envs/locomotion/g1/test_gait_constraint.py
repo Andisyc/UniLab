@@ -184,6 +184,34 @@ def test_zero_command_drift_does_not_open_gait_constraint_gate() -> None:
     np.testing.assert_allclose(bridged_reward, reward)
 
 
+def test_stand_mode_can_apply_double_stance_gait_cost() -> None:
+    reward_cfg = _reward_config(
+        apply_in_stand_mode=True,
+        epsilon=0.0,
+        penalty_scale=1.0,
+    )
+    env = _fake_env(reward_cfg)
+    reward = np.asarray([1.0], dtype=np.float32)
+    ctx = RewardContext(
+        info={
+            "commands": np.asarray([[0.0, 0.0, 0.0]], dtype=np.float32),
+            "gait_phase": np.asarray([[np.pi, np.pi]], dtype=np.float32),
+        },
+        linvel=np.zeros((1, 3), dtype=np.float32),
+        gyro=np.zeros((1, 3), dtype=np.float32),
+        dof_pos=np.zeros((1, 29), dtype=np.float32),
+        num_envs=1,
+    )
+
+    components = env._compute_gait_constraint_components(ctx, reward_cfg.gait_constraint)
+    bridged_reward = env._apply_gait_constraint_bridge(ctx, reward)
+
+    assert components["command_active"][0] == 0.0
+    assert components["gate"][0] == 1.0
+    assert components["total"][0] > 0.0
+    assert bridged_reward[0] < reward[0]
+
+
 def test_stand_phase_replaces_observation_phase_for_inactive_command() -> None:
     reward_cfg = _reward_config(
         freeze_phase_in_stand_mode=True,
@@ -243,6 +271,31 @@ def test_stand_rewards_only_apply_when_command_inactive() -> None:
     np.testing.assert_allclose(env._reward_stand_still(ctx), np.asarray([29.0, 0.0]))
     np.testing.assert_allclose(env._reward_stand_action_l2(ctx), np.asarray([29.0, 0.0]))
     np.testing.assert_allclose(env._reward_stand_dof_vel_l2(ctx), np.asarray([29.0, 0.0]))
+
+
+def test_stand_drift_rewards_only_apply_when_command_inactive() -> None:
+    reward_cfg = _reward_config()
+    env = _fake_env(reward_cfg, num_envs=2)
+    ctx = RewardContext(
+        info={
+            "commands": np.asarray([[0.0, 0.0, 0.0], [0.2, 0.0, 0.0]], dtype=np.float32)
+        },
+        linvel=np.asarray([[0.1, 0.2, 0.0], [0.1, 0.2, 0.0]], dtype=np.float32),
+        gyro=np.asarray([[0.0, 0.0, 0.3], [0.0, 0.0, 0.3]], dtype=np.float32),
+        dof_pos=np.zeros((2, 29), dtype=np.float32),
+        num_envs=2,
+    )
+
+    np.testing.assert_allclose(
+        env._reward_stand_lin_vel_xy_l2(ctx),
+        np.asarray([0.05, 0.0], dtype=np.float32),
+        rtol=1.0e-6,
+    )
+    np.testing.assert_allclose(
+        env._reward_stand_yaw_vel_l2(ctx),
+        np.asarray([0.09, 0.0], dtype=np.float32),
+        rtol=1.0e-6,
+    )
 
 
 def test_nonzero_command_applies_gait_constraint_cost() -> None:

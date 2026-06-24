@@ -426,6 +426,8 @@ class G1WalkEnv(G1BaseEnv):
             "stand_still": self._reward_stand_still,
             "stand_action_l2": self._reward_stand_action_l2,
             "stand_dof_vel_l2": self._reward_stand_dof_vel_l2,
+            "stand_lin_vel_xy_l2": self._reward_stand_lin_vel_xy_l2,
+            "stand_yaw_vel_l2": self._reward_stand_yaw_vel_l2,
             "feet_phase": self._reward_feet_phase,
             "feet_phase_contrast": self._reward_feet_phase_contrast,
             "feet_phase_contact": self._reward_feet_phase_contact,
@@ -840,6 +842,18 @@ class G1WalkEnv(G1BaseEnv):
         assert ctx.dof_vel is not None
         return np.asarray(
             np.sum(np.square(ctx.dof_vel), axis=1) * self._stand_mode_mask(ctx),
+            dtype=get_global_dtype(),
+        )
+
+    def _reward_stand_lin_vel_xy_l2(self, ctx: RewardContext):
+        return np.asarray(
+            np.sum(np.square(ctx.linvel[:, :2]), axis=1) * self._stand_mode_mask(ctx),
+            dtype=get_global_dtype(),
+        )
+
+    def _reward_stand_yaw_vel_l2(self, ctx: RewardContext):
+        return np.asarray(
+            np.square(ctx.gyro[:, 2]) * self._stand_mode_mask(ctx),
             dtype=get_global_dtype(),
         )
 
