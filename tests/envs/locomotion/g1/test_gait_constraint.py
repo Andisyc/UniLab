@@ -264,6 +264,38 @@ def test_explicit_gait_enabled_overrides_command_magnitude() -> None:
     np.testing.assert_array_equal(stand_mask, np.asarray([0.0, 1.0], dtype=np.float32))
 
 
+def test_reset_observation_accepts_partial_gait_enabled_batch() -> None:
+    reward_cfg = _reward_config(
+        freeze_phase_in_stand_mode=True,
+        stand_phase=[np.pi, np.pi],
+    )
+    env = _fake_env(reward_cfg, num_envs=2048)
+    info = {
+        "commands": np.asarray(
+            [
+                [0.0, 0.0, 0.0],
+                [0.01, 0.0, 0.0],
+                [0.0, 0.0, -0.01],
+                [0.0, 0.0, 0.0],
+                [0.2, 0.0, 0.0],
+            ],
+            dtype=np.float32,
+        ),
+        "gait_enabled": np.asarray([0.0, 1.0, 1.0, 0.0, 1.0], dtype=np.float32),
+        "gait_phase": np.asarray(
+            [[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [0.5, 0.6], [1.5, 1.6]],
+            dtype=np.float32,
+        ),
+    }
+
+    phase = env._gait_phase_for_observation(info)
+
+    assert phase.shape == (5, 2)
+    np.testing.assert_allclose(phase[0], np.asarray([np.pi, np.pi], dtype=np.float32))
+    np.testing.assert_allclose(phase[1], np.asarray([3.0, 4.0], dtype=np.float32))
+    np.testing.assert_allclose(phase[3], np.asarray([np.pi, np.pi], dtype=np.float32))
+
+
 def test_reward_mode_dispatch_separates_stand_and_walk_terms() -> None:
     reward_cfg = G1WalkRewardConfig(
         scales={

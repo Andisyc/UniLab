@@ -582,8 +582,14 @@ class G1WalkEnv(G1BaseEnv):
         mask = np.asarray(info["gait_enabled"], dtype=get_global_dtype())
         if mask.ndim == 2 and mask.shape[1] == 1:
             mask = mask[:, 0]
-        if mask.shape != (self._num_envs,):
-            raise ValueError(f"gait_enabled must have shape ({self._num_envs},), got {mask.shape}")
+        commands = info.get("commands")
+        expected_size = (
+            np.asarray(commands).shape[0]
+            if commands is not None
+            else self._num_envs
+        )
+        if mask.shape != (expected_size,):
+            raise ValueError(f"gait_enabled must have shape ({expected_size},), got {mask.shape}")
         return np.asarray(mask > 0.5, dtype=get_global_dtype())
 
     def _stand_phase_array(self) -> np.ndarray:

@@ -643,3 +643,23 @@ Validation:
 - Unit-test that stand terms do not contribute in walk mode.
 - Unit-test that walk terms do not contribute in stand mode.
 - Keep existing config tests as owner-YAML contract checks.
+
+## 23. 2026-06-24 Reset-Time Mode Mask Batch Contract
+
+Runtime failure:
+
+- During async off-policy training, `_reset_done_envs()` can reset only the environments that just finished.
+- In the observed crash, global `num_envs` was 2048 but the reset batch contained only 5 environments.
+- `info["gait_enabled"]` correctly had shape `(5,)`, but `_gait_enabled_mask()` incorrectly required `(2048,)`.
+
+Contract correction:
+
+- Mode masks are per-info-batch tensors.
+- During rollout step they usually match global `num_envs`.
+- During reset observation construction they match `len(env_ids)`.
+- Validation must compare `gait_enabled` against the current `commands` batch when commands are present, not against global env count.
+
+Validation:
+
+- Add a regression test where `env._num_envs` is larger than the reset info batch.
+- Verify `_gait_phase_for_observation()` accepts partial reset batches and still applies stand-phase replacement correctly.
