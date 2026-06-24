@@ -98,6 +98,12 @@ class LocomotionDRProvider(DomainRandomizationProvider):
         """Return additional info_updates entries (e.g. gait_phase for G1)."""
         return {}
 
+    def _build_extra_info_updates_for_commands(
+        self, env: Any, num_reset: int, commands: np.ndarray
+    ) -> dict[str, np.ndarray]:
+        """Return additional reset info that depends on sampled commands."""
+        return self._build_extra_info_updates(env, num_reset)
+
     def build_reset_plan(self, env: Any, env_ids: np.ndarray) -> ResetPlan:
         num_reset = len(env_ids)
         qpos = np.tile(env._init_qpos, (num_reset, 1))
@@ -110,12 +116,13 @@ class LocomotionDRProvider(DomainRandomizationProvider):
         qvel[:, 0:6] = np.asarray(
             np.random.uniform(-limit, limit, size=(num_reset, 6)), dtype=get_global_dtype()
         )
+        commands = self._sample_commands(env, num_reset)
         info_updates: dict[str, Any] = {
-            "commands": self._sample_commands(env, num_reset),
+            "commands": commands,
             "current_actions": zero_actions(num_reset, env._num_action),
             "last_actions": zero_actions(num_reset, env._num_action),
         }
-        info_updates.update(self._build_extra_info_updates(env, num_reset))
+        info_updates.update(self._build_extra_info_updates_for_commands(env, num_reset, commands))
         base_kp, base_kd = self._get_base_actuator_gains(env)
         base_body_mass, base_geom_friction, ground_geom_id, base_dof_armature = (
             self._get_reset_randomization_baselines(env)

@@ -18,7 +18,7 @@ def test_reward_config_loading_g1():
         assert cfg.reward.scales.feet_phase_contact == 0.0
         assert cfg.reward.scales.alive == 2.0
         assert cfg.reward.scales.stand_still == -2.0
-        assert cfg.reward.scales.stand_action_l2 == -0.5
+        assert cfg.reward.scales.stand_action_l2 == -2.0
         assert cfg.reward.scales.stand_dof_vel_l2 == -0.15
         assert cfg.reward.scales.stand_lin_vel_xy_l2 == -30.0
         assert cfg.reward.scales.stand_yaw_vel_l2 == -10.0
@@ -38,6 +38,13 @@ def test_reward_config_loading_g1():
         assert cfg.env.commands.vel_limit[0] == [-0.3, -0.2, -0.4]
         assert cfg.env.commands.small_xy_threshold == 0.05
         assert cfg.env.commands.rel_standing_envs == 0.4
+        assert cfg.env.stand_action_authority is False
+        assert cfg.reward.mode.enabled is True
+        assert "tracking_lin_vel" not in cfg.reward.mode.stand_terms
+        assert "stand_lin_vel_xy_l2" in cfg.reward.mode.stand_terms
+        assert "stand_lin_vel_xy_l2" not in cfg.reward.mode.walk_terms
+        assert "tracking_lin_vel" in cfg.reward.mode.walk_terms
+        assert "stand_action_l2" not in cfg.reward.mode.walk_terms
         assert cfg.reward.pose_weights[2] == 0.05
         assert cfg.reward.pose_weights[8] == 0.05
 

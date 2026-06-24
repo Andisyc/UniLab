@@ -573,3 +573,73 @@ Engineering follow-up:
 - Keep `tracking_lin_vel`, `tracking_ang_vel`, and gait constraint command-gated semantics unchanged.
 - Update the active SAC G1 owner config with strong enough anti-drift scales to make small zero-command drift more expensive than the tracking reward tolerance near zero.
 - Add tests proving that zero-command drift is penalized while the same measured velocity under a nonzero command is not treated as a stand violation.
+
+## 21. 2026-06-24 Stand Mode Must Remove Action Authority
+
+Training observation after anti-drift and stand gait constraints:
+
+- The policy still discovers the in-place stepping attractor during early training.
+- The behavior includes slight drift, so the oscillator can still create a locomotion-like transition under zero command.
+- Reward penalties after the transition are not enough to prevent the attractor from forming.
+
+Diagnosis:
+
+- The previous fixes treated zero-command stepping as a reward violation.
+- That is too late in the causal chain: the actor can still execute locomotion actions, move the body, and let the critic discover that this default oscillator is useful across nearby low-speed commands.
+- The missing boundary is action authority.
+- Command is the only legitimate authorization signal for locomotion actions.
+- When command is inactive, the policy may be penalized for nonzero raw action, but the env should not execute that action as locomotion control.
+
+Engineering follow-up:
+
+- Add an owner-configured `stand_action_authority` switch for G1 walking.
+- When enabled, `apply_action()` keeps raw policy actions in `current_actions` for observation/reward accounting, but uses zero executed actions for inactive-command environments.
+- Store `executed_actions` in `info` for diagnostics.
+- Keep walk-mode action authority unchanged when command is active.
+- Strengthen stand raw-action penalty so the actor learns to output zero under inactive commands, rather than relying only on the execution clamp.
+- Add tests proving inactive-command actions are clamped at execution while active-command actions still pass through.
+
+## 22. 2026-06-24 Mode-Specific Reward Contract
+
+Concept correction:
+
+- The current "locomotion" training task is actually training two behaviors in one network: standing and walking.
+- Standing and walking are not two speeds of the same objective.
+- Standing suppresses support transfer, drift, and periodic gait.
+- Walking authorizes support transfer, drift, and periodic gait to track an external command.
+- If both objectives are mixed in one reward table, the policy can discover an intersection: low-amplitude stepping with small drift.
+
+Mode contract:
+
+- `gait_enabled = false` is a discrete external mode: train standing only.
+- `gait_enabled = true` is a discrete external mode: train walking only.
+- Command magnitude is continuous only inside walking mode; it must not decide whether gaiting is authorized.
+- Actual velocity is an outcome, not a mode selector.
+
+Engineering ownership:
+
+- Env owns mode interpretation, reward masking, action authority, gait phase freezing, and diagnostics.
+- Owner YAML owns which reward terms belong to standing and walking for this task/backend.
+- Training scripts remain orchestration only.
+
+Minimal implementation:
+
+- Add reward mode config under `reward.mode`.
+- Dispatch stand reward terms and walk reward terms separately.
+- Combine them as `stand_mask * R_stand + walk_mask * R_walk`.
+- Write `info["gait_enabled"]` during G1 reset from the discrete nonzero external command event.
+- Derive `gait_enabled` from `info["gait_enabled"]` when present; otherwise fall back to command activity for backward compatibility.
+- Keep actor observation dimension unchanged in this iteration; command zero/nonzero remains the observable proxy until a separate deployment contract introduces an explicit `gait_enabled` observation.
+
+Forbidden freedom:
+
+- Do not use measured velocity to enable walking reward.
+- Do not let stand reward and walk reward both shape the same transition.
+- Do not restore positive `feet_phase*` rewards in stand mode.
+
+Validation:
+
+- Unit-test reward mode masks independently of raw command magnitude.
+- Unit-test that stand terms do not contribute in walk mode.
+- Unit-test that walk terms do not contribute in stand mode.
+- Keep existing config tests as owner-YAML contract checks.

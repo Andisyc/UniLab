@@ -23,6 +23,7 @@ env:
     small_xy_threshold: 0.05
   gait_phase_init_mode: "offset_phase"
   reset_base_qvel_limit: 0.5
+  stand_action_authority: false
   curriculum:
     enabled: true
     initial_scale: 0.5
@@ -47,7 +48,7 @@ reward:
     penalty_orientation: -10.0
     penalty_action_rate: -4.0
     stand_still: -2.0
-    stand_action_l2: -0.5
+    stand_action_l2: -2.0
     stand_dof_vel_l2: -0.15
     stand_lin_vel_xy_l2: -30.0
     stand_yaw_vel_l2: -10.0
@@ -65,6 +66,29 @@ reward:
   feet_phase_swing_height: 0.09
   feet_phase_tracking_sigma: 0.04
   close_feet_threshold: 0.15
+  mode:
+    enabled: true
+    stand_terms:
+      - penalty_orientation
+      - penalty_ang_vel_xy
+      - stand_still
+      - stand_action_l2
+      - stand_dof_vel_l2
+      - stand_lin_vel_xy_l2
+      - stand_yaw_vel_l2
+      - pose
+      - penalty_feet_ori
+      - alive
+    walk_terms:
+      - tracking_lin_vel
+      - tracking_ang_vel
+      - under_speed
+      - penalty_orientation
+      - penalty_ang_vel_xy
+      - penalty_action_rate
+      - pose
+      - penalty_feet_ori
+      - alive
   gait_constraint:
     enabled: true
     command_xy_threshold: 0.05
