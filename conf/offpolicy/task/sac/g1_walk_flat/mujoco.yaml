@@ -75,5 +75,5 @@ reward:
     apply_in_stand_mode: false
     apply_when_tracking: false
     freeze_phase_in_stand_mode: true
-    stand_phase: [0.0, 3.141592653589793]
+    stand_phase: [3.141592653589793, 3.141592653589793]
   pose_weights: [0.01, 1.0, 0.05, 0.01, 5.0, 5.0, 0.01, 1.0, 0.05, 0.01, 5.0, 5.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0]

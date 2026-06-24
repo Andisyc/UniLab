@@ -28,6 +28,10 @@ def test_reward_config_loading_g1():
         assert cfg.reward.gait_constraint.contact_weight == 1.0
         assert cfg.reward.gait_constraint.epsilon == 0.0
         assert cfg.reward.gait_constraint.penalty_scale == 2.0
+        assert cfg.reward.gait_constraint.stand_phase == [
+            3.141592653589793,
+            3.141592653589793,
+        ]
         assert cfg.env.commands.vel_limit[0] == [-0.3, -0.2, -0.4]
         assert cfg.env.commands.small_xy_threshold == 0.05
         assert cfg.env.commands.rel_standing_envs == 0.2

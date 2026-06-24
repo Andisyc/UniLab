@@ -136,6 +136,20 @@ def test_gait_phase_violation_zero_when_feet_match_generator() -> None:
     np.testing.assert_allclose(contact, 0.0)
 
 
+def test_stand_phase_is_double_stance() -> None:
+    cfg = GaitConstraintConfig()
+    gait_phase = np.asarray([cfg.stand_phase], dtype=np.float32)
+    swing_height = 0.09
+
+    left_target, right_target = compute_feet_phase_height_targets(gait_phase, swing_height)
+    left_contact, right_contact = compute_feet_phase_contact_targets(gait_phase, swing_height)
+
+    np.testing.assert_allclose(left_target, 0.0, atol=1.0e-6)
+    np.testing.assert_allclose(right_target, 0.0, atol=1.0e-6)
+    np.testing.assert_array_equal(left_contact, np.asarray([True]))
+    np.testing.assert_array_equal(right_contact, np.asarray([True]))
+
+
 def test_reward_config_converts_gait_constraint_dict() -> None:
     cfg = G1WalkRewardConfig(
         scales={},
@@ -173,7 +187,7 @@ def test_zero_command_drift_does_not_open_gait_constraint_gate() -> None:
 def test_stand_phase_replaces_observation_phase_for_inactive_command() -> None:
     reward_cfg = _reward_config(
         freeze_phase_in_stand_mode=True,
-        stand_phase=[0.0, np.pi],
+        stand_phase=[np.pi, np.pi],
     )
     env = _fake_env(reward_cfg, num_envs=2)
     info = {
@@ -183,14 +197,14 @@ def test_stand_phase_replaces_observation_phase_for_inactive_command() -> None:
 
     phase = env._gait_phase_for_observation(info)
 
-    np.testing.assert_allclose(phase[0], np.asarray([0.0, np.pi], dtype=np.float32))
+    np.testing.assert_allclose(phase[0], np.asarray([np.pi, np.pi], dtype=np.float32))
     np.testing.assert_allclose(phase[1], np.asarray([3.0, 4.0], dtype=np.float32))
 
 
 def test_apply_action_freezes_stand_phase_and_advances_active_phase() -> None:
     reward_cfg = _reward_config(
         freeze_phase_in_stand_mode=True,
-        stand_phase=[0.0, np.pi],
+        stand_phase=[np.pi, np.pi],
     )
     env = _fake_env(reward_cfg, num_envs=2)
     state = NpEnvState(
@@ -207,7 +221,7 @@ def test_apply_action_freezes_stand_phase_and_advances_active_phase() -> None:
     ctrl = env.apply_action(np.zeros((2, 29), dtype=np.float32), state)
 
     np.testing.assert_allclose(ctrl, np.zeros((2, 29), dtype=np.float32))
-    np.testing.assert_allclose(state.info["gait_phase"][0], np.asarray([0.0, np.pi]))
+    np.testing.assert_allclose(state.info["gait_phase"][0], np.asarray([np.pi, np.pi]))
     np.testing.assert_allclose(state.info["gait_phase"][1], np.asarray([3.1, 4.1]))
 
 

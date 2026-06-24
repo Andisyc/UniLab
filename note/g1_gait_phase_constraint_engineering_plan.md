@@ -503,3 +503,25 @@ Engineering follow-up:
 - Keep positive `feet_phase*` rewards disabled.
 - Further relax hip-yaw pose weights to near zero in the active SAC G1 config.
 - Validate by config tests rather than a top-level script-only check, because this fix is an owner-YAML objective contract change.
+
+## 18. 2026-06-24 Stand Phase Must Be Double Stance
+
+Training observation after Section 17:
+
+- Low-speed forward/backward/yaw behavior improves.
+- Standing stability and no-fall behavior remain acceptable.
+- In-place stepping returns, which violates the original stand-mode contract.
+
+Diagnosis:
+
+- The failure is not caused by restoring positive `feet_phase*` rewards; those remain disabled.
+- The stand-mode phase itself is wrong.
+- With the current generator, phase `0` maps to a swing-height target, while phase `pi` maps to a stance target.
+- Therefore `stand_phase: [0, pi]` is not a neutral standing phase. It tells the actor that one foot is in swing even when command is zero.
+- Freezing a walking phase is still a walking cue; stand mode needs a real double-stance phase.
+
+Engineering follow-up:
+
+- Change the default and active SAC G1 `stand_phase` to `[pi, pi]`, so both feet map to stance/contact targets.
+- Add a unit test that proves the configured stand phase produces zero height targets and contact targets for both feet.
+- Keep the Section 17 low-speed gait authority changes in place unless the next training run shows a separate regression.

@@ -204,7 +204,7 @@ class GaitConstraintConfig:
     apply_when_tracking: bool = False
     tracking_threshold: float = 0.3
     freeze_phase_in_stand_mode: bool = False
-    stand_phase: list[float] = field(default_factory=lambda: [0.0, math.pi])
+    stand_phase: list[float] = field(default_factory=lambda: [math.pi, math.pi])
 
 
 @dataclass
