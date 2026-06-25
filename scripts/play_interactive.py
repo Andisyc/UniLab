@@ -1101,13 +1101,18 @@ def _policy_obs_contains_command(env: Any, *, reset_fn) -> bool:
         return False
 
     original_vel_limit = cmds_cfg.vel_limit
+    original_rel_standing_envs = getattr(cmds_cfg, "rel_standing_envs", None)
     probe = _COMMAND_OBS_VERIFY_COMMAND.tolist()
     try:
         cmds_cfg.vel_limit = [probe, probe]
+        if original_rel_standing_envs is not None:
+            cmds_cfg.rel_standing_envs = 0.0
         reset_fn()
         return _state_policy_obs_contains_command(env)
     finally:
         cmds_cfg.vel_limit = original_vel_limit
+        if original_rel_standing_envs is not None:
+            cmds_cfg.rel_standing_envs = original_rel_standing_envs
         reset_fn()
 
 

@@ -1187,3 +1187,41 @@ Expected behavior after retraining:
   match in standing samples.
 - A successful standing run should reduce drift and termination through learned
   residual balance, not through env-side action suppression.
+
+## 35. 2026-06-25 Keyboard Command Probe Must Not Sample Standing Reset
+
+Observed playback failure:
+
+- The first `./start.sh` launch could open the viewer and keyboard commands
+  changed `vx/vyaw`.
+- After closing and launching again, playback printed:
+
+```text
+[play_interactive] interactive.keyboard unavailable: policy obs does not contain the velocity command.
+```
+
+Diagnosis:
+
+- This was a playback verification false negative, not a MuJoCo or policy load
+  crash.
+- `_policy_obs_contains_command()` verifies keyboard control by temporarily
+  setting `commands.vel_limit` to a probe command and calling reset.
+- For G1 mixed-mode configs, `rel_standing_envs=0.4` means reset can still
+  sample a standing env and zero the command.
+- If that happens during the probe reset, the checker sees a zero-command obs
+  and incorrectly concludes that policy obs has no velocity command.
+- That explains the random behavior: one launch can pass, another can fail.
+
+Engineering correction:
+
+- During the playback-only command-observation probe, temporarily set
+  `commands.rel_standing_envs=0.0` together with the probe `vel_limit`.
+- Restore both fields immediately after the probe.
+- This does not affect training or normal rollout; it only makes the startup
+  keyboard-safety check deterministic.
+
+Validation:
+
+- Unit-test that `_policy_obs_contains_command()` disables standing sampling
+  during the probe and restores `rel_standing_envs` / `vel_limit` afterward.
+- Re-run G1 mode/reward lifecycle tests and the stage live-path sentinel.

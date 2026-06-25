@@ -2959,6 +2959,43 @@ def test_play_interactive_warns_about_hard_gated_standing_checkpoint() -> None:
     assert any("stand_action_authority=true" in issue for issue in issues)
 
 
+def test_play_interactive_command_obs_probe_disables_standing_sampling() -> None:
+    mod = _play_interactive()
+    probe = np.asarray(mod._COMMAND_OBS_VERIFY_COMMAND, dtype=np.float32)
+
+    class Cfg:
+        commands = types.SimpleNamespace(
+            vel_limit=[[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]],
+            rel_standing_envs=0.4,
+        )
+
+    class State:
+        info: dict[str, Any]
+        obs: dict[str, np.ndarray]
+
+    class Env:
+        cfg = Cfg()
+        state = State()
+
+    env = Env()
+    reset_rel_standing_values: list[float] = []
+
+    def reset_fn() -> None:
+        rel_standing = float(env.cfg.commands.rel_standing_envs)
+        reset_rel_standing_values.append(rel_standing)
+        if rel_standing > 0.0:
+            command = np.zeros(3, dtype=np.float32)
+        else:
+            command = probe.copy()
+        env.state.info = {"commands": command[None, :]}
+        env.state.obs = {"obs": np.concatenate([np.zeros(5, dtype=np.float32), command])[None, :]}
+
+    assert mod._policy_obs_contains_command(env, reset_fn=reset_fn) is True
+    assert reset_rel_standing_values[0] == 0.0
+    assert env.cfg.commands.rel_standing_envs == 0.4
+    assert env.cfg.commands.vel_limit == [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]
+
+
 def test_play_interactive_runner_log_dir_uses_algo_log_name(monkeypatch: pytest.MonkeyPatch):
     import types
 
