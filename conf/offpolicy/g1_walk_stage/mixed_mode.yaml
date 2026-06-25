@@ -1,0 +1,17 @@
+# @package _global_
+env:
+  commands:
+    vel_limit:
+      - [-0.3, -0.2, -0.4]
+      - [0.8, 0.2, 0.4]
+    rel_standing_envs: 0.4
+    small_xy_threshold: 0.0
+  reset_base_qvel_limit: 0.5
+  standing_reset_base_qvel_limit: 0.0
+  stand_action_authority: false
+  curriculum:
+    enabled: true
+    initial_scale: 0.5
+    min_scale: 0.5
+    max_scale: 1.0
+

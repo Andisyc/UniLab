@@ -304,7 +304,9 @@ class G1WalkEnvCfg(G1BaseCfg):
     reward_config: G1RewardConfig | None = None
     domain_rand: G1DomainRandConfig = field(default_factory=G1DomainRandConfig)
     gait_phase_init_mode: str = "offset_phase"
+    mode_observation: bool = False
     reset_base_qvel_limit: float = 0.5
+    standing_reset_base_qvel_limit: float = 0.0
     stand_action_authority: bool = False
     curriculum: CurriculumConfig = field(default_factory=CurriculumConfig)
 
@@ -320,14 +322,55 @@ class G1WalkDomainRandomizationProvider(LocomotionDRProvider):
     def _get_qvel_limit(self, env: Any) -> float:
         return float(env.cfg.reset_base_qvel_limit)
 
+    def build_reset_plan(self, env: Any, env_ids: np.ndarray):
+        plan = super().build_reset_plan(env, env_ids)
+        gait_enabled = compute_external_command_mask(plan.info_updates["commands"]).astype(bool)
+        standing = ~gait_enabled
+        if np.any(standing):
+            limit = float(getattr(env.cfg, "standing_reset_base_qvel_limit", 0.0))
+            if limit <= 0.0:
+                plan.qvel[standing, 0:6] = 0.0
+            else:
+                plan.qvel[standing, 0:6] = np.asarray(
+                    np.random.uniform(-limit, limit, size=(int(np.sum(standing)), 6)),
+                    dtype=get_global_dtype(),
+                )
+        return plan
+
     def _build_extra_info_updates_for_commands(
         self, env: Any, num_reset: int, commands: np.ndarray
     ) -> dict[str, np.ndarray]:
-        updates = {"gait_phase": self._sample_gait_phase(env, num_reset)}
-        updates["gait_enabled"] = compute_external_command_mask(commands)
+        gait_enabled = compute_external_command_mask(commands)
+        gait_phase = self._sample_gait_phase(env, num_reset)
+        self._apply_standing_reset_phase(env, gait_phase, gait_enabled)
+        updates = {"gait_phase": gait_phase, "gait_enabled": gait_enabled}
         if getattr(env.cfg.commands, "heading_command", False):
             updates["heading_commands"] = sample_heading_commands(env, num_reset)
         return updates
+
+    def _apply_standing_reset_phase(
+        self, env: Any, gait_phase: np.ndarray, gait_enabled: np.ndarray
+    ) -> None:
+        reward_cfg = getattr(env.cfg, "reward_config", None)
+        gait_cfg = getattr(reward_cfg, "gait_constraint", None)
+        if gait_cfg is None:
+            return
+        if isinstance(gait_cfg, dict):
+            enabled = bool(gait_cfg.get("enabled", False))
+            freeze = bool(gait_cfg.get("freeze_phase_in_stand_mode", False))
+            stand_phase = gait_cfg.get("stand_phase", [math.pi, math.pi])
+        else:
+            enabled = bool(getattr(gait_cfg, "enabled", False))
+            freeze = bool(getattr(gait_cfg, "freeze_phase_in_stand_mode", False))
+            stand_phase = getattr(gait_cfg, "stand_phase", [math.pi, math.pi])
+        if not (enabled and freeze):
+            return
+        stand_phase_arr = np.asarray(stand_phase, dtype=get_global_dtype())
+        if stand_phase_arr.shape != (2,):
+            raise ValueError(f"gait_constraint.stand_phase must have shape (2,), got {stand_phase}")
+        standing = np.asarray(gait_enabled <= 0.5, dtype=bool)
+        if np.any(standing):
+            gait_phase[standing, :] = stand_phase_arr[None, :]
 
     def _sample_commands(self, env: Any, num_reset: int) -> np.ndarray:
         commands = super()._sample_commands(env, num_reset)
@@ -420,8 +463,10 @@ class G1WalkEnv(G1BaseEnv):
 
     @property
     def obs_groups_spec(self) -> dict[str, int]:
-        # gyro(3) + gravity(3) + diff(29) + dof_vel(29) + action(29) + cmd(3) + phase(2) = 98
-        return {"obs": 98, "critic": 101}
+        # gyro(3) + gravity(3) + diff(29) + dof_vel(29) + action(29) + cmd(3)
+        # + phase(2) [+ mode(1)] = 98/99; critic additionally sees linvel(3).
+        mode_dim = 1 if self._cfg.mode_observation else 0
+        return {"obs": 98 + mode_dim, "critic": 101 + mode_dim}
 
     def _init_reward_functions(self):
         self._reward_fns: dict[str, Any] = {
@@ -502,6 +547,7 @@ class G1WalkEnv(G1BaseEnv):
         command = info["commands"]
         last_actions = info.get("current_actions", np.zeros_like(diff))
         gait_phase = self._gait_phase_for_observation(info)
+        mode_obs = self._mode_observation(info)
         walk_profile = self._uses_walk_observation_profile()
 
         noisy_gyro = self._obs_noise(gyro, noise_cfg.scale_gyro)
@@ -511,36 +557,34 @@ class G1WalkEnv(G1BaseEnv):
         actor_gyro_scale = 0.25 if walk_profile else 1.0
         actor_dof_vel_scale = 0.05 if walk_profile else 1.0
 
-        actor = np.concatenate(
-            [
-                noisy_gyro * actor_gyro_scale,
-                -noisy_gravity,
-                noisy_diff,
-                noisy_dof_vel * actor_dof_vel_scale,
-                last_actions,
-                command,
-                gait_phase,
-            ],
-            axis=1,
-            dtype=get_global_dtype(),
-        )
+        actor_parts = [
+            noisy_gyro * actor_gyro_scale,
+            -noisy_gravity,
+            noisy_diff,
+            noisy_dof_vel * actor_dof_vel_scale,
+            last_actions,
+            command,
+            gait_phase,
+        ]
+        if self._cfg.mode_observation:
+            actor_parts.append(mode_obs)
+        actor = np.concatenate(actor_parts, axis=1, dtype=get_global_dtype())
 
         critic_gyro_scale = 0.25 if walk_profile else 1.0
         critic_dof_vel_scale = 0.05 if walk_profile else 1.0
         critic_linvel_scale = 2.0 if walk_profile else 1.0
-        critic_base = np.concatenate(
-            [
-                gyro * critic_gyro_scale,
-                -gravity,
-                diff,
-                dof_vel * critic_dof_vel_scale,
-                last_actions,
-                command,
-                gait_phase,
-            ],
-            axis=1,
-            dtype=get_global_dtype(),
-        )
+        critic_parts = [
+            gyro * critic_gyro_scale,
+            -gravity,
+            diff,
+            dof_vel * critic_dof_vel_scale,
+            last_actions,
+            command,
+            gait_phase,
+        ]
+        if self._cfg.mode_observation:
+            critic_parts.append(mode_obs)
+        critic_base = np.concatenate(critic_parts, axis=1, dtype=get_global_dtype())
         critic = np.concatenate(
             [
                 critic_base,
@@ -617,9 +661,10 @@ class G1WalkEnv(G1BaseEnv):
         return stand_phase
 
     def _actions_for_execution(self, actions: np.ndarray, info: dict) -> np.ndarray:
-        if not self._cfg.stand_action_authority:
-            return actions
         active = self._gait_enabled_mask(info).astype(bool)
+        if not self._cfg.stand_action_authority:
+            self._log_action_authority(info, actions, actions, active)
+            return actions
         if np.all(active):
             self._log_action_authority(info, actions, actions, active)
             return actions
@@ -658,8 +703,6 @@ class G1WalkEnv(G1BaseEnv):
         info["log"] = log
 
     def _log_current_action_authority(self, info: dict) -> None:
-        if not self._cfg.stand_action_authority:
-            return
         raw_actions = info.get("current_actions")
         exec_actions = info.get("executed_actions")
         if raw_actions is None or exec_actions is None:
@@ -680,6 +723,10 @@ class G1WalkEnv(G1BaseEnv):
         return np.asarray(
             np.where(active[:, None], gait_phase, stand_phase[None, :]), dtype=get_global_dtype()
         )
+
+    def _mode_observation(self, info: dict) -> np.ndarray:
+        gait_enabled = self._gait_enabled_mask(info)
+        return np.asarray(gait_enabled[:, None], dtype=get_global_dtype())
 
     def _uses_walk_observation_profile(self) -> bool:
         scales = getattr(getattr(self, "_reward_cfg", None), "scales", None)
@@ -705,7 +752,7 @@ class G1WalkEnv(G1BaseEnv):
         return bool(curriculum is not None and curriculum.enabled)
 
     def _actor_symmetry_obs_layout(self) -> SymmetryObsLayout:
-        return (
+        layout = [
             ("gyro", 3),
             ("gravity", 3),
             ("dof_pos", self._num_action),
@@ -713,7 +760,10 @@ class G1WalkEnv(G1BaseEnv):
             ("actions", self._num_action),
             ("command", 3),
             ("gait_phase", 2),
-        )
+        ]
+        if self._cfg.mode_observation:
+            layout.append(("mode", 1))
+        return tuple(layout)
 
     def get_symmetry_obs_layouts(self) -> dict[str, SymmetryObsLayout]:
         actor_layout = self._actor_symmetry_obs_layout()

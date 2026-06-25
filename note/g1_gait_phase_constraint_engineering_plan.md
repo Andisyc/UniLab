@@ -854,3 +854,261 @@ Validation:
 - Unit-test that a zero-command sample with high walking velocity receives zero walking reward contribution.
 - Unit-test that reward component logs are mode-masked.
 - Keep action-authority diagnostics: standing samples should show `reward/stand_executed_action_l1 == 0.0`.
+
+## 31. 2026-06-25 Standing Reset Must Satisfy Idle Controller Assumption
+
+Observation after failed training:
+
+- With no external command, the robot can still drift.
+- This makes the standing segment look like it never reaches a true idle state, even though `gait_enabled == 0`.
+
+Concept correction:
+
+- LeCAR-like hard gating assumes that when locomotion authority is off, the remaining idle/default controller is given an idle-compatible state.
+- UniLab G1 reset previously sampled random base velocity for every env before command sampling.
+- Therefore standing samples could start with nonzero base velocity while locomotion actions were explicitly blocked.
+- That creates a contradiction: the policy is not allowed to correct the motion, but the reset state already contains motion.
+
+Engineering correction:
+
+- Add `env.standing_reset_base_qvel_limit`.
+- For G1 walking, after commands are sampled, detect zero-command standing reset samples.
+- Clamp/resample their base qvel independently from walking samples.
+- The active MuJoCo owner config sets `standing_reset_base_qvel_limit: 0.0`.
+- Walking samples keep `reset_base_qvel_limit: 0.5`, so walking robustness is not removed.
+
+Validation:
+
+- Unit-test that G1 reset plan zeros base qvel for standing samples but preserves nonzero qvel randomization for walking samples.
+- Keep mode/action diagnostics to ensure standing samples still report `reward/mode_stand_frac > 0` and `reward/stand_executed_action_l1 == 0.0`.
+
+## 32. 2026-06-25 Mode-Conditioned Single-Policy Plan
+
+Goal:
+
+- Do not rely on a deployment-only hard gate as the core solution.
+- Train one policy that can genuinely represent two externally specified modes:
+  - `STAND`: zero external gait command, quiet double-support standing.
+  - `WALK`: nonzero external gait command, velocity tracking and gait control.
+- Prevent walking behavior from smoothly generalizing into zero-command standing observations.
+
+Design principle:
+
+- Zero command is too weak as a mode signal because it is only a boundary point in continuous command space.
+- Add an explicit mode/gait authority signal to the policy observation.
+- Keep reward routing as a hard if:
+
+```text
+if gait_enabled:
+    Walking reward is visible.
+else:
+    Standing reward is visible.
+```
+
+- But do not use action hard-gating as the main learning mechanism. The policy must see `gait_enabled` and learn different actions for different modes.
+
+Module ownership:
+
+- `src/unilab/envs/locomotion/g1/joystick.py`
+  - Owns G1 mode signal construction.
+  - Owns actor/critic observation layout and dimension changes.
+  - Owns standing reset distribution.
+  - Owns standing/walking reward routing and diagnostics.
+- `conf/offpolicy/task/sac/g1_walk_flat/mujoco.yaml`
+  - Owns active task hyperparameters and curriculum defaults.
+  - Adds config switches for mode-conditioned observation and optional standing action authority ablations.
+- `tests/envs/locomotion/g1/test_gait_constraint.py`
+  - Owns unit/lifecycle tests for mode signal, observation dimension, reward routing, reset distribution, and action diagnostics.
+- `tests/config/test_reward_injection.py`
+  - Owns Hydra owner-config contract checks.
+- Off-policy runner/learner
+  - Should not be changed in the first step. SAC can train from the new observation once env exposes the correct contract.
+
+Step A: explicit mode observation (implemented)
+
+- Add a G1 env config field such as `mode_observation: true`.
+- Append one scalar to actor and critic observations:
+
+```text
+mode_signal = gait_enabled
+0.0 = STAND
+1.0 = WALK
+```
+
+- Update `obs_groups_spec` from:
+
+```text
+obs=98, critic=101
+```
+
+to:
+
+```text
+obs=99, critic=102
+```
+
+- Update symmetry observation layout to include `("mode", 1)`.
+- This intentionally invalidates old checkpoints because the policy input contract changed.
+
+Step A tests:
+
+- Unit-test that zero command gives `mode_signal = 0`.
+- Unit-test that any nonzero command gives `mode_signal = 1`.
+- Unit-test actor/critic observation dimensions.
+- Config test that active G1 SAC MuJoCo owner YAML enables mode observation.
+- Optional play/checkpoint guard should warn that old 98-dim checkpoints are incompatible with mode-conditioned policy.
+
+Step B: standing reset distribution (implemented)
+
+- Keep `standing_reset_base_qvel_limit: 0.0`.
+- Ensure standing reset also starts with:
+  - `current_actions = 0`;
+  - `last_actions = 0`;
+  - frozen stand gait phase;
+  - zero command;
+  - `gait_enabled = 0`.
+- Walking reset may keep velocity perturbation and normal gait phase sampling.
+- Standing reset writes stand phase into `info["gait_phase"]` directly, not only through observation-time freezing.
+
+Step B tests:
+
+- Reset-plan test for qvel split by mode.
+- Reset-observation test for partial standing/walking batches.
+- Test that standing reset actor obs contains zero command, stand phase, zero last action, and mode signal 0.
+
+Step C: reward routing remains hard-if (implemented)
+
+- Keep masked reward dispatch.
+- Standing samples must not receive tracking/gait/walking-style reward.
+- Walking samples must not receive standing-specific reward.
+- Standing reward should focus on:
+  - no xy drift;
+  - no yaw drift;
+  - low joint velocity;
+  - posture/default pose;
+  - foot contact/foot no-slip if needed.
+
+Step C tests:
+
+- Zero-command sample with high forward velocity cannot receive `tracking_lin_vel`.
+- Nonzero-command sample does not receive `stand_lin_vel_xy_l2`.
+- Logs for shared terms such as `alive` remain mode-masked and not overwritten.
+
+Step D: ablation switch for action authority (implemented)
+
+- Keep `stand_action_authority` as a safety/ablation switch, but no longer treat it as the core learning mechanism.
+- Two recommended experiments:
+
+```text
+mode_observation=true, stand_action_authority=true
+mode_observation=true, stand_action_authority=false
+```
+
+- If `stand_action_authority=false` succeeds only after mode observation is added, that proves the policy learned standing rather than relying on the hard gate.
+- If it still fails, standing reward/reset distribution remains insufficient.
+
+Step D tests:
+
+- Existing action-authority tests remain.
+- Add config-level ablation tests to ensure both switches are independently expressible.
+- Add `apply_action` test that `stand_action_authority=false` preserves raw policy actions even for standing samples.
+
+Step E: training curriculum (implemented)
+
+- Stage 1: standing-heavy or standing-only sanity run.
+  - Goal: `stand_raw_action_l1` decreases, xy/yaw drift remains near zero, episode length increases.
+- Stage 2: walking-only or walking-heavy run.
+  - Goal: locomotion still learns gait and tracking.
+- Stage 3: mixed stand/walk.
+  - Goal: mode switch separates behavior.
+- Stage 4: transition curriculum if needed.
+  - Add short stand-to-walk and walk-to-stand segments only after stand/walk are individually stable.
+
+Implemented Hydra stage configs:
+
+- `+g1_walk_stage=standing_sanity`
+  - `rel_standing_envs=1.0`;
+  - zero velocity command range;
+  - `reset_base_qvel_limit=0.0`;
+  - `stand_action_authority=false`.
+- `+g1_walk_stage=walking_sanity`
+  - `rel_standing_envs=0.0`;
+  - reduced walking command range;
+  - `reset_base_qvel_limit=0.5`;
+  - `stand_action_authority=false`.
+- `+g1_walk_stage=mixed_mode`
+  - `rel_standing_envs=0.4`;
+  - full G1 flat command range;
+  - `reset_base_qvel_limit=0.5`;
+  - `stand_action_authority=false`.
+
+Recommended commands:
+
+```bash
+CUDA_VISIBLE_DEVICES=4 HYDRA_FULL_ERROR=1 PYTHONWARNINGS="ignore" \
+  uv run train --algo sac --task g1_walk_flat --sim mujoco \
+  +g1_walk_stage=standing_sanity \
+  algo.max_iterations=800
+
+CUDA_VISIBLE_DEVICES=4 HYDRA_FULL_ERROR=1 PYTHONWARNINGS="ignore" \
+  uv run train --algo sac --task g1_walk_flat --sim mujoco \
+  +g1_walk_stage=walking_sanity \
+  algo.max_iterations=800
+
+CUDA_VISIBLE_DEVICES=4 HYDRA_FULL_ERROR=1 PYTHONWARNINGS="ignore" \
+  uv run train --algo sac --task g1_walk_flat --sim mujoco \
+  +g1_walk_stage=mixed_mode \
+  algo.max_iterations=5000
+```
+
+Expected live diagnostics:
+
+- `reward/mode_stand_frac`
+- `reward/mode_walk_frac`
+- `reward/stand_raw_action_l1`
+- `reward/stand_executed_action_l1`
+- `reward/stand_lin_vel_xy_l2`
+- `reward/stand_yaw_vel_l2`
+- `reward/walk_total`
+- `reward/stand_total`
+
+Acceptance criteria before long training:
+
+- Tests pass.
+- Fresh run config records `obs=99`, `critic=102`, `mode_observation=true`.
+- Terminal shows standing samples and standing action diagnostics.
+- Short standing-heavy run shows `stand_raw_action_l1` trending down rather than remaining walking-like.
+
+Step F: live-path stage sentinel (implemented)
+
+- Add `scripts/deploy/check_unilab_g1_walk_stage_live_path.py`.
+- The sentinel does not train and does not rely on checkpoint quality.
+- It composes the same Hydra stage fragments used by training:
+  - `+g1_walk_stage=standing_sanity`;
+  - `+g1_walk_stage=walking_sanity`;
+  - `+g1_walk_stage=mixed_mode`.
+- It then constructs `G1WalkFlat` through `BackendAdapter -> create_env -> registry.make`, calls `init_state()`, runs a short zero-cost `step()` with fixed actions, and checks:
+  - `obs=99`, `critic=102`;
+  - `mode_signal` agrees with `gait_enabled`;
+  - standing/walking fractions match the stage;
+  - `stand_action_authority=false` reaches the env override;
+  - reward-mode logs appear in the live path;
+  - standing action diagnostics are visible even when action authority is disabled.
+
+Important Step F correction:
+
+- Action diagnostics must not depend on `stand_action_authority=true`.
+- For ablation runs with `stand_action_authority=false`, we still need `reward/stand_raw_action_l1` and `reward/stand_executed_action_l1`.
+- Otherwise the short standing-heavy run cannot tell whether the policy actually learned to reduce standing actions.
+
+Step F validation command:
+
+```bash
+uv run scripts/deploy/check_unilab_g1_walk_stage_live_path.py --num-envs 16 --steps 1
+```
+
+Observed local sentinel result:
+
+- `standing_sanity`: `reward/mode_stand_frac=1.0`, `reward/mode_walk_frac=0.0`.
+- `walking_sanity`: `reward/mode_stand_frac=0.0`, `reward/mode_walk_frac=1.0`.
+- `mixed_mode`: both stand and walk samples appear in the same live batch.
