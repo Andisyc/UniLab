@@ -39,6 +39,8 @@ def test_reward_config_loading_g1():
         assert cfg.env.commands.small_xy_threshold == 0.0
         assert cfg.env.commands.rel_standing_envs == 0.4
         assert cfg.env.stand_action_authority is True
+        assert cfg.interactive.action_mode == "policy"
+        assert cfg.interactive.keyboard is True
         assert cfg.reward.mode.enabled is True
         assert "tracking_lin_vel" not in cfg.reward.mode.stand_terms
         assert "stand_lin_vel_xy_l2" in cfg.reward.mode.stand_terms

@@ -2,6 +2,9 @@
 training:
   task_name: G1WalkFlat
   sim_backend: mujoco
+interactive:
+  action_mode: policy
+  keyboard: true
 algo:
   num_envs: 2048
   learning_starts: 10

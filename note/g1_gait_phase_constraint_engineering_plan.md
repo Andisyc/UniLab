@@ -779,3 +779,36 @@ Validation:
 
 - Config test must assert `env.stand_action_authority is True`.
 - Existing action-authority unit test must prove raw policy actions are kept while executed stand actions are zeroed.
+
+## 29. 2026-06-25 Standing Fix Must Be Visible In Playback And Live Logs
+
+Failure after retraining feedback:
+
+- The robot still visually steps in place, matching the original failure.
+- This rejects another round of reward tuning as the next step.
+- The missing evidence is whether the live run actually entered the standing execution contract.
+
+Concept correction:
+
+- Standing mode is only proven if three live-path facts are simultaneously true:
+  - the current command is exactly zero;
+  - the reward mode reports stand samples;
+  - the executed action for stand samples is zero even if the raw policy action is nonzero.
+- Playback must not leave the command source ambiguous. For G1 SAC walking, interactive playback should default to policy actions controlled by keyboard commands.
+
+Engineering correction:
+
+- Set the G1 SAC MuJoCo owner YAML interactive default to `action_mode: policy` and `keyboard: true`.
+- Log action-authority diagnostics from `G1WalkEnv.apply_action()`:
+  - `mode/action_authority_stand_frac`;
+  - `mode/raw_action_l1`;
+  - `mode/executed_action_l1`;
+  - `mode/stand_raw_action_l1`;
+  - `mode/stand_executed_action_l1`.
+
+Expected next-run sentinel:
+
+- During training with `rel_standing_envs: 0.4`, logs should show `reward/mode_stand_frac` near `0.4`.
+- For standing samples, `mode/stand_executed_action_l1` should be exactly `0.0`.
+- If `mode/stand_raw_action_l1` remains large, the actor has not yet learned standing, but execution authority is still correctly preventing the standing samples from stepping.
+- If `mode/stand_executed_action_l1` is nonzero under zero command, the standing authority contract is not live.

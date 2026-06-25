@@ -621,10 +621,41 @@ class G1WalkEnv(G1BaseEnv):
             return actions
         active = self._gait_enabled_mask(info).astype(bool)
         if np.all(active):
+            self._log_action_authority(info, actions, actions, active)
             return actions
         exec_actions = np.array(actions, copy=True)
         exec_actions[~active] = 0.0
+        self._log_action_authority(info, actions, exec_actions, active)
         return exec_actions
+
+    def _log_action_authority(
+        self,
+        info: dict,
+        raw_actions: np.ndarray,
+        exec_actions: np.ndarray,
+        active: np.ndarray,
+    ) -> None:
+        if not self._enable_reward_log:
+            return
+        step_count = info.get("steps", np.zeros((self._num_envs,), dtype=np.uint32))
+        if int(step_count[0]) % 4 != 0:
+            return
+        log = info.get("log", {})
+        stand = ~active.astype(bool)
+        log["mode/action_authority_stand_frac"] = float(np.mean(stand))
+        log["mode/raw_action_l1"] = float(np.mean(np.sum(np.abs(raw_actions), axis=1)))
+        log["mode/executed_action_l1"] = float(np.mean(np.sum(np.abs(exec_actions), axis=1)))
+        if np.any(stand):
+            log["mode/stand_raw_action_l1"] = float(
+                np.mean(np.sum(np.abs(raw_actions[stand]), axis=1))
+            )
+            log["mode/stand_executed_action_l1"] = float(
+                np.mean(np.sum(np.abs(exec_actions[stand]), axis=1))
+            )
+        else:
+            log["mode/stand_raw_action_l1"] = 0.0
+            log["mode/stand_executed_action_l1"] = 0.0
+        info["log"] = log
 
     def _gait_phase_for_observation(self, info: dict) -> np.ndarray:
         gait_phase = np.asarray(
