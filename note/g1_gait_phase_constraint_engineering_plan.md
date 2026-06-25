@@ -751,3 +751,31 @@ Validation:
 
 - Add a playback-time warning for G1 SAC policy playback when the selected run config lacks `reward.mode.enabled`, required stand terms, `env.commands.rel_standing_envs`, frozen stand gait phase, or still has positive gait-phase reward.
 - Add tests for compatible and incompatible run configs so this diagnosis survives future refactors.
+
+## 28. 2026-06-25 Standing Mode Must Own Execution Authority
+
+Failure after simulation feedback:
+
+- The code can correctly enter standing mode, but the owner config still has `env.stand_action_authority = false`.
+- With that setting, standing mode only changes reward accounting and gait phase observation.
+- The policy's locomotion action is still executed by PD at zero command.
+- Therefore a policy that learned stepping can remain visually stepping even when standing reward terms are active.
+
+Concept correction:
+
+- External command is not only a reward selector.
+- It is the authority switch for whether locomotion actions may be executed.
+- `command == 0` means the locomotion action channel is not authorized.
+- In standing mode the env may still record the raw policy action for `stand_action_l2`, but the executed action must be the standing/default action.
+- `command != 0` restores normal locomotion action authority immediately.
+
+Engineering correction:
+
+- Set `env.stand_action_authority: true` in the active G1 SAC MuJoCo owner YAML.
+- Keep `current_actions` as the raw policy output so standing reward can still train the actor away from useless zero-command actions.
+- Use `executed_actions` only for PD control.
+
+Validation:
+
+- Config test must assert `env.stand_action_authority is True`.
+- Existing action-authority unit test must prove raw policy actions are kept while executed stand actions are zeroed.

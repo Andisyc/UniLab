@@ -23,7 +23,7 @@ env:
     small_xy_threshold: 0.0
   gait_phase_init_mode: "offset_phase"
   reset_base_qvel_limit: 0.5
-  stand_action_authority: false
+  stand_action_authority: true
   curriculum:
     enabled: true
     initial_scale: 0.5

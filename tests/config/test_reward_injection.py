@@ -38,7 +38,7 @@ def test_reward_config_loading_g1():
         assert cfg.env.commands.vel_limit[0] == [-0.3, -0.2, -0.4]
         assert cfg.env.commands.small_xy_threshold == 0.0
         assert cfg.env.commands.rel_standing_envs == 0.4
-        assert cfg.env.stand_action_authority is False
+        assert cfg.env.stand_action_authority is True
         assert cfg.reward.mode.enabled is True
         assert "tracking_lin_vel" not in cfg.reward.mode.stand_terms
         assert "stand_lin_vel_xy_l2" in cfg.reward.mode.stand_terms
@@ -62,6 +62,7 @@ def test_offpolicy_g1_env_override_carries_standing_mode_contract():
 
     assert override["commands"]["rel_standing_envs"] == 0.4
     assert override["commands"]["small_xy_threshold"] == 0.0
+    assert override["stand_action_authority"] is True
     assert override["reward_config"]["mode"]["enabled"] is True
     assert "stand_lin_vel_xy_l2" in override["reward_config"]["mode"]["stand_terms"]
 

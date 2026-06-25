@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 from pathlib import Path
 from typing import Any
 
@@ -239,6 +240,81 @@ def test_handle_command_key_maps_drive_style_keys():
 
     mod._handle_command_key(commander, mod._KEY_ENTER)  # full stop
     assert commander.command.tolist() == [0.0, 0.0, 0.0]
+
+
+def test_g1_standing_contract_flags_old_walking_only_run_config():
+    mod = _load_script("play_interactive")
+    run_config = {
+        "config": {
+            "env": {},
+            "reward": {
+                "scales": {
+                    "feet_phase": 5.0,
+                    "alive": 10.0,
+                }
+            },
+        }
+    }
+
+    issues = mod._g1_standing_contract_issues(run_config)
+
+    assert any("rel_standing_envs" in issue for issue in issues)
+    assert any("reward.mode.enabled" in issue for issue in issues)
+    assert any("feet_phase=5.0" in issue for issue in issues)
+
+
+def test_g1_standing_contract_accepts_two_mode_run_config():
+    mod = _load_script("play_interactive")
+    run_config = {
+        "config": {
+            "env": {"commands": {"rel_standing_envs": 0.4}},
+            "reward": {
+                "scales": {"feet_phase": 0.0},
+                "mode": {
+                    "enabled": True,
+                    "stand_terms": [
+                        "stand_still",
+                        "stand_action_l2",
+                        "stand_dof_vel_l2",
+                        "stand_lin_vel_xy_l2",
+                        "stand_yaw_vel_l2",
+                        "alive",
+                    ],
+                },
+                "gait_constraint": {"freeze_phase_in_stand_mode": True},
+            },
+        }
+    }
+
+    assert mod._g1_standing_contract_issues(run_config) == []
+
+
+def test_g1_sac_playback_warns_for_checkpoint_without_standing_contract(tmp_path):
+    mod = _load_script("play_interactive")
+    checkpoint = tmp_path / "model_1000.pt"
+    checkpoint.write_bytes(b"")
+    (tmp_path / "run_config.json").write_text(
+        json.dumps(
+            {
+                "config": {
+                    "env": {},
+                    "reward": {"scales": {"feet_phase": 5.0}},
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    messages: list[str] = []
+
+    issues = mod._warn_if_g1_sac_checkpoint_lacks_standing_contract(
+        algo="sac",
+        task_name="g1_walk_flat",
+        checkpoint_path=str(checkpoint),
+        log=messages.append,
+    )
+
+    assert issues
+    assert any("standing/walking reward-mode contract" in message for message in messages)
 
 
 def test_play_interactive_viewer_model_uses_shared_render_playback_resolver(
