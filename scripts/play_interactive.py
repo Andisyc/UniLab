@@ -27,11 +27,12 @@ Camera controls (MuJoCo viewer):
 # pyright: reportAttributeAccessIssue=false, reportArgumentType=false, reportOptionalMemberAccess=false, reportOptionalSubscript=false
 
 import argparse
+import json
 import sys
 import tempfile
 import time
 import warnings
-from collections.abc import Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
@@ -191,6 +192,81 @@ def _algo_config_dict(cfg: DictConfig | None) -> dict[str, Any]:
     return cast(dict[str, Any], train_cfg_raw)
 
 
+def _nested_get(data: Mapping[str, Any], dotted_path: str, default: Any = None) -> Any:
+    current: Any = data
+    for key in dotted_path.split("."):
+        if not isinstance(current, Mapping) or key not in current:
+            return default
+        current = current[key]
+    return current
+
+
+def _g1_standing_contract_issues(run_config: Mapping[str, Any]) -> list[str]:
+    issues: list[str] = []
+    rel_standing = _nested_get(run_config, "config.env.commands.rel_standing_envs")
+    if rel_standing is None or float(rel_standing) <= 0.0:
+        issues.append("missing config.env.commands.rel_standing_envs > 0")
+
+    mode_enabled = _nested_get(run_config, "config.reward.mode.enabled")
+    if mode_enabled is not True:
+        issues.append("missing config.reward.mode.enabled=true")
+
+    stand_terms_raw = _nested_get(run_config, "config.reward.mode.stand_terms", [])
+    stand_terms = set(stand_terms_raw if isinstance(stand_terms_raw, list) else [])
+    missing_terms = sorted(_G1_STANDING_CONTRACT_STAND_TERMS - stand_terms)
+    if missing_terms:
+        issues.append("missing stand reward terms: " + ", ".join(missing_terms))
+    if "tracking_lin_vel" in stand_terms:
+        issues.append("stand_terms must not include tracking_lin_vel")
+
+    freeze_stand_phase = _nested_get(
+        run_config, "config.reward.gait_constraint.freeze_phase_in_stand_mode"
+    )
+    if freeze_stand_phase is not True:
+        issues.append("missing reward.gait_constraint.freeze_phase_in_stand_mode=true")
+
+    feet_phase_scale = _nested_get(run_config, "config.reward.scales.feet_phase", 0.0)
+    if float(feet_phase_scale) > 0.0:
+        issues.append(f"positive old gait reward config.reward.scales.feet_phase={feet_phase_scale}")
+
+    return issues
+
+
+def _warn_if_g1_sac_checkpoint_lacks_standing_contract(
+    *,
+    algo: str,
+    task_name: str,
+    checkpoint_path: str | None,
+    log: Callable[[str], None] = print,
+) -> list[str]:
+    if algo not in _OFFPOLICY_INTERACTIVE_ALGOS:
+        return []
+    if task_name not in {"g1_walk_flat", "G1WalkFlat"}:
+        return []
+    if checkpoint_path is None:
+        return []
+
+    run_config_path = Path(checkpoint_path).parent / "run_config.json"
+    if not run_config_path.is_file():
+        issues = [f"missing run_config.json beside checkpoint: {run_config_path}"]
+    else:
+        with run_config_path.open("r", encoding="utf-8") as f:
+            run_config = json.load(f)
+        issues = _g1_standing_contract_issues(run_config)
+
+    if issues:
+        log(
+            "WARNING: selected G1 SAC checkpoint does not satisfy the "
+            "standing/walking reward-mode contract."
+        )
+        log(f"  checkpoint: {checkpoint_path}")
+        log(f"  run_config: {run_config_path}")
+        for issue in issues:
+            log(f"  - {issue}")
+        log("  Retrain or pass algo.load_run=<new standing-mode run> before judging standing.")
+    return issues
+
+
 SUPPORTED_INTERACTIVE_ALGOS = ("ppo", "appo", "sac", "flashsac", "hora_distill")
 _CONFIG_ROOT_BY_ALGO = {
     "ppo": "ppo",
@@ -200,6 +276,13 @@ _CONFIG_ROOT_BY_ALGO = {
     "hora_distill": "hora_distill",
 }
 _OFFPOLICY_INTERACTIVE_ALGOS = {"sac", "flashsac"}
+_G1_STANDING_CONTRACT_STAND_TERMS = {
+    "stand_still",
+    "stand_action_l2",
+    "stand_dof_vel_l2",
+    "stand_lin_vel_xy_l2",
+    "stand_yaw_vel_l2",
+}
 
 
 @dataclass(frozen=True)
@@ -1093,6 +1176,12 @@ def play_interactive(args, cfg: DictConfig | None = None, *, algo: str | None = 
                 root_dir=ROOT_DIR,
                 device=device,
                 algo_name=algo,
+                log=lambda message: print(f"[play_interactive] {message}"),
+            )
+            _warn_if_g1_sac_checkpoint_lacks_standing_contract(
+                algo=algo,
+                task_name=str(args.task),
+                checkpoint_path=session[2],
                 log=lambda message: print(f"[play_interactive] {message}"),
             )
         elif algo == "hora_distill":

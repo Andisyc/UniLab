@@ -731,3 +731,23 @@ Validation:
 - Unit-test that stale `gait_enabled = false` with current nonzero command is corrected to walk mode.
 - Unit-test that reward-mode dispatch follows current command rather than stale reset-time `gait_enabled`.
 - Unit-test that `apply_action()` freezes stand phase after an external command is edited to zero.
+
+## 27. 2026-06-25 Playback Must Reject Old Walking-Only Checkpoints
+
+Failure after another simulation test:
+
+- Local `load_run=-1` resolves to `logs/fast_sac/G1WalkFlat/2026-06-12_15-46-01_mujoco`.
+- That run was trained at commit `9dee71386ed61b46f8ec93d74499dcdb4d06bb92`, before the standing/walking reward-mode contract.
+- Its `run_config.json` has no `env.commands.rel_standing_envs`, no `reward.mode`, no `gait_constraint`, positive `feet_phase = 5.0`, and `alive = 10.0`.
+- Therefore playback of that checkpoint should still step in place. It is evidence for an old policy, not evidence that the current two-mode env code failed.
+
+Contract correction:
+
+- Debugging standing behavior must inspect both current code and the checkpoint's `run_config.json`.
+- A G1 SAC checkpoint is not standing-mode-compatible unless its run config records the two-mode reward contract.
+- `load_run=-1` is unsafe during iterative reward redesign because it silently selects the latest available run under the configured log root, which may be an old walking-only run.
+
+Validation:
+
+- Add a playback-time warning for G1 SAC policy playback when the selected run config lacks `reward.mode.enabled`, required stand terms, `env.commands.rel_standing_envs`, frozen stand gait phase, or still has positive gait-phase reward.
+- Add tests for compatible and incompatible run configs so this diagnosis survives future refactors.
