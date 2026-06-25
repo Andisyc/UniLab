@@ -642,19 +642,19 @@ class G1WalkEnv(G1BaseEnv):
             return
         log = info.get("log", {})
         stand = ~active.astype(bool)
-        log["mode/action_authority_stand_frac"] = float(np.mean(stand))
-        log["mode/raw_action_l1"] = float(np.mean(np.sum(np.abs(raw_actions), axis=1)))
-        log["mode/executed_action_l1"] = float(np.mean(np.sum(np.abs(exec_actions), axis=1)))
+        log["reward/action_authority_stand_frac"] = float(np.mean(stand))
+        log["reward/raw_action_l1"] = float(np.mean(np.sum(np.abs(raw_actions), axis=1)))
+        log["reward/executed_action_l1"] = float(np.mean(np.sum(np.abs(exec_actions), axis=1)))
         if np.any(stand):
-            log["mode/stand_raw_action_l1"] = float(
+            log["reward/stand_raw_action_l1"] = float(
                 np.mean(np.sum(np.abs(raw_actions[stand]), axis=1))
             )
-            log["mode/stand_executed_action_l1"] = float(
+            log["reward/stand_executed_action_l1"] = float(
                 np.mean(np.sum(np.abs(exec_actions[stand]), axis=1))
             )
         else:
-            log["mode/stand_raw_action_l1"] = 0.0
-            log["mode/stand_executed_action_l1"] = 0.0
+            log["reward/stand_raw_action_l1"] = 0.0
+            log["reward/stand_executed_action_l1"] = 0.0
         info["log"] = log
 
     def _gait_phase_for_observation(self, info: dict) -> np.ndarray:

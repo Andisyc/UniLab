@@ -800,15 +800,15 @@ Engineering correction:
 
 - Set the G1 SAC MuJoCo owner YAML interactive default to `action_mode: policy` and `keyboard: true`.
 - Log action-authority diagnostics from `G1WalkEnv.apply_action()`:
-  - `mode/action_authority_stand_frac`;
-  - `mode/raw_action_l1`;
-  - `mode/executed_action_l1`;
-  - `mode/stand_raw_action_l1`;
-  - `mode/stand_executed_action_l1`.
+  - `reward/action_authority_stand_frac`;
+  - `reward/raw_action_l1`;
+  - `reward/executed_action_l1`;
+  - `reward/stand_raw_action_l1`;
+  - `reward/stand_executed_action_l1`.
 
 Expected next-run sentinel:
 
 - During training with `rel_standing_envs: 0.4`, logs should show `reward/mode_stand_frac` near `0.4`.
-- For standing samples, `mode/stand_executed_action_l1` should be exactly `0.0`.
-- If `mode/stand_raw_action_l1` remains large, the actor has not yet learned standing, but execution authority is still correctly preventing the standing samples from stepping.
-- If `mode/stand_executed_action_l1` is nonzero under zero command, the standing authority contract is not live.
+- For standing samples, `reward/stand_executed_action_l1` should be exactly `0.0`.
+- If `reward/stand_raw_action_l1` remains large, the actor has not yet learned standing, but execution authority is still correctly preventing the standing samples from stepping.
+- If `reward/stand_executed_action_l1` is nonzero under zero command, the standing authority contract is not live.

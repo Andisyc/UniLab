@@ -576,10 +576,10 @@ def test_apply_action_logs_stand_action_authority_live_path() -> None:
     env.apply_action(actions, state)
 
     log = state.info["log"]
-    assert log["mode/action_authority_stand_frac"] == 0.5
-    assert log["mode/stand_raw_action_l1"] == 29.0
-    assert log["mode/stand_executed_action_l1"] == 0.0
-    assert log["mode/executed_action_l1"] == 14.5
+    assert log["reward/action_authority_stand_frac"] == 0.5
+    assert log["reward/stand_raw_action_l1"] == 29.0
+    assert log["reward/stand_executed_action_l1"] == 0.0
+    assert log["reward/executed_action_l1"] == 14.5
 
 
 def test_stand_rewards_only_apply_when_command_inactive() -> None:
