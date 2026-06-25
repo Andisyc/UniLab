@@ -819,3 +819,38 @@ Logging lifecycle correction:
 - `rewards.run_reward_dispatch()` creates a fresh `info["log"]` on logging ticks.
 - Therefore action-authority diagnostics written only inside `apply_action()` can be erased before the collector reads `info["log"]`.
 - G1 must re-log action-authority diagnostics at the end of `_compute_reward()`, after reward dispatch and gait-constraint logging.
+
+## 30. 2026-06-25 Walking Reward Must Be Hard-Gated By External Gait Authority
+
+Concept correction:
+
+- The core LeCAR-like idea is not to let reward teach the policy whether to walk.
+- External command decides gait authority.
+- When `gait_enabled == 0`, the locomotion policy has no gait/action authority and must not be able to receive Walking Reward.
+- When `gait_enabled == 1`, Walking Reward is active and the locomotion policy is trained normally.
+
+Failure mechanism:
+
+- If zero-command samples can receive any tracking, gait, phase, or walking-style reward, the policy can hack the objective by stepping or drifting in place.
+- A soft penalty on idle motion is not enough because it still leaves the walking reward channel visible.
+- The important boundary is an explicit if:
+
+```text
+if gait_enabled:
+    apply Walking Reward
+else:
+    apply Idle/Standing Reward only
+```
+
+Engineering correction:
+
+- Replace the previous "compute stand and walk rewards for all envs, then multiply by masks" implementation with a masked mode dispatch.
+- Each reward term must be multiplied by its mode mask at the point where the term contributes to the reward.
+- Logged term values must also be mode-masked, so terminal/TensorBoard cannot show walking reward earned by standing samples.
+- `reward/stand_total` and `reward/walk_total` remain the canonical mode totals.
+
+Validation:
+
+- Unit-test that a zero-command sample with high walking velocity receives zero walking reward contribution.
+- Unit-test that reward component logs are mode-masked.
+- Keep action-authority diagnostics: standing samples should show `reward/stand_executed_action_l1 == 0.0`.

@@ -365,6 +365,54 @@ def test_reward_mode_dispatch_separates_stand_and_walk_terms() -> None:
     assert reward[1] > 0.0
 
 
+def test_walking_reward_is_hard_gated_out_of_standing_samples() -> None:
+    reward_cfg = G1WalkRewardConfig(
+        scales={"tracking_lin_vel": 2.0},
+        tracking_sigma=0.12,
+        gait_frequency=1.5,
+        feet_phase_swing_height=0.09,
+        feet_phase_tracking_sigma=0.04,
+        base_height_target=0.754,
+        min_base_height=0.3,
+        max_tilt_deg=65.0,
+        gait_constraint=GaitConstraintConfig(enabled=False),
+        mode=RewardModeConfig(
+            enabled=True,
+            stand_terms=[],
+            walk_terms=["tracking_lin_vel"],
+        ),
+        pose_weights=[0.01] * 29,
+    )
+    env = _fake_env(reward_cfg, num_envs=2)
+    env._enable_reward_log = True
+    ctx = RewardContext(
+        info={
+            "commands": np.asarray([[0.0, 0.0, 0.0], [0.2, 0.0, 0.0]], dtype=np.float32),
+            "steps": np.zeros((2,), dtype=np.uint32),
+        },
+        linvel=np.asarray([[0.2, 0.0, 0.0], [0.2, 0.0, 0.0]], dtype=np.float32),
+        gyro=np.zeros((2, 3), dtype=np.float32),
+        dof_pos=np.zeros((2, 29), dtype=np.float32),
+        dof_vel=np.zeros((2, 29), dtype=np.float32),
+        num_envs=2,
+        default_angles=np.zeros((29,), dtype=np.float32),
+        tracking_sigma=reward_cfg.tracking_sigma,
+        base_height_target=reward_cfg.base_height_target,
+        base_height=np.full((2,), reward_cfg.base_height_target, dtype=np.float32),
+        gravity=np.asarray([[0.0, 0.0, 1.0], [0.0, 0.0, 1.0]], dtype=np.float32),
+        pose_weights=np.ones((29,), dtype=np.float32),
+    )
+
+    reward = env._compute_mode_reward(ctx, reward_cfg)
+
+    assert reward[0] == 0.0
+    assert reward[1] > 0.0
+    assert ctx.info["log"]["reward/mode_stand_frac"] == 0.5
+    assert ctx.info["log"]["reward/mode_walk_frac"] == 0.5
+    assert ctx.info["log"]["reward/stand_total"] == 0.0
+    assert ctx.info["log"]["reward/walk_total"] > 0.0
+
+
 def test_reward_mode_logs_reward_prefixed_live_path_diagnostics() -> None:
     reward_cfg = G1WalkRewardConfig(
         scales={

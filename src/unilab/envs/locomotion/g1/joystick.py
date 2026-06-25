@@ -771,30 +771,48 @@ class G1WalkEnv(G1BaseEnv):
                 ctrl_dt=self._cfg.ctrl_dt,
             )
 
-        stand_reward = self._run_mode_reward_dispatch(ctx, cfg, mode_cfg.stand_terms)
-        walk_reward = self._run_mode_reward_dispatch(ctx, cfg, mode_cfg.walk_terms)
         walk_mask = self._gait_enabled_mask(ctx.info)
         stand_mask = np.asarray(1.0 - walk_mask, dtype=get_global_dtype())
-        reward = np.asarray(
-            stand_mask * stand_reward + walk_mask * walk_reward,
-            dtype=get_global_dtype(),
+        self._reset_mode_reward_log(ctx.info)
+        stand_reward = self._run_masked_mode_reward_dispatch(
+            ctx, cfg, mode_cfg.stand_terms, stand_mask
         )
+        walk_reward = self._run_masked_mode_reward_dispatch(
+            ctx, cfg, mode_cfg.walk_terms, walk_mask
+        )
+        reward = np.asarray(stand_reward + walk_reward, dtype=get_global_dtype())
         self._log_reward_mode(ctx.info, stand_mask, walk_mask, stand_reward, walk_reward)
         return reward
 
-    def _run_mode_reward_dispatch(
-        self, ctx: RewardContext, cfg: G1RewardConfig, terms: list[str]
+    def _reset_mode_reward_log(self, info: dict) -> None:
+        step_count = info.get("steps", np.zeros((self._num_envs,), dtype=np.uint32))
+        if self._enable_reward_log and int(step_count[0]) % 4 == 0:
+            info["log"] = {}
+
+    def _run_masked_mode_reward_dispatch(
+        self, ctx: RewardContext, cfg: G1RewardConfig, terms: list[str], mask: np.ndarray
     ) -> np.ndarray:
+        dtype = get_global_dtype()
         term_set = set(terms)
         scales = {name: scale for name, scale in cfg.scales.items() if name in term_set}
-        return rewards.run_reward_dispatch(
-            scales=scales,
-            fns=self._reward_fns,
-            ctx=ctx,
-            info=ctx.info,
-            enable_log=self._enable_reward_log,
-            ctrl_dt=self._cfg.ctrl_dt,
-        )
+        reward = np.zeros((ctx.num_envs,), dtype=dtype)
+        step_count = ctx.info.get("steps", np.zeros((ctx.num_envs,), dtype=np.uint32))
+        should_log = self._enable_reward_log and int(step_count[0]) % 4 == 0
+        log = ctx.info.get("log", {})
+        mode_mask = np.asarray(mask, dtype=dtype)
+
+        for name, scale in scales.items():
+            if scale == 0 or name not in self._reward_fns:
+                continue
+            rew = self._reward_fns[name](ctx)
+            weighted_rew = np.asarray(rew * scale * mode_mask, dtype=dtype)
+            reward += weighted_rew
+            if should_log:
+                key = f"reward/{name}"
+                log[key] = float(log.get(key, 0.0) + np.mean(weighted_rew))
+
+        ctx.info["log"] = log
+        return reward * self._cfg.ctrl_dt
 
     def _log_reward_mode(
         self,
