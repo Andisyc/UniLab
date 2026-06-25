@@ -1112,3 +1112,35 @@ Observed local sentinel result:
 - `standing_sanity`: `reward/mode_stand_frac=1.0`, `reward/mode_walk_frac=0.0`.
 - `walking_sanity`: `reward/mode_stand_frac=0.0`, `reward/mode_walk_frac=1.0`.
 - `mixed_mode`: both stand and walk samples appear in the same live batch.
+
+## 33. 2026-06-25 Playback Must Restore Checkpoint Env Contract
+
+Observed failure after training:
+
+```text
+RuntimeError: size mismatch for net.0.weight:
+copying a param with shape torch.Size([512, 99]) from checkpoint,
+the shape in current model is torch.Size([512, 98])
+```
+
+Diagnosis:
+
+- The checkpoint was trained with `env.mode_observation=true`, so actor input is 99.
+- Playback rebuilt the env/actor with a 98-dimensional observation contract.
+- This is not a bad checkpoint. It is a train/play contract mismatch.
+
+Engineering correction:
+
+- `scripts/play_interactive.py` now reads the selected checkpoint's sibling `run_config.json`.
+- For off-policy playback, it replays the checkpoint's `config.env` and `config.reward` into the env override before creating the playback env.
+- `src/unilab/visualization/interactive_playback.py` now checks the checkpoint actor first-layer input dimension before `load_state_dict`.
+- If the checkpoint and playback env still disagree, the error now names:
+  - `checkpoint=<dim>`;
+  - `playback_env_obs=<dim>`;
+  - the missing env contract restoration.
+
+Validation:
+
+- Unit-test that SAC/G1 playback env override restores `mode_observation=true` from checkpoint `run_config.json`.
+- Unit-test that a 99-dim SAC actor checkpoint against a 98-dim playback env raises an explicit contract error.
+- Existing G1 stage live-path sentinel still passes.

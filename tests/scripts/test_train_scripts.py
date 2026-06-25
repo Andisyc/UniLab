@@ -2878,6 +2878,56 @@ def test_play_interactive_sac_task_shorthand_rewrites_to_owner_group():
     ]
 
 
+def test_play_interactive_replays_checkpoint_env_contract_for_sac_g1(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    mod = _play_interactive()
+    checkpoint = tmp_path / "model_10.pt"
+    checkpoint.write_bytes(b"checkpoint")
+    (tmp_path / "run_config.json").write_text(
+        json.dumps(
+            {
+                "config": {
+                    "env": {
+                        "mode_observation": True,
+                        "commands": {"rel_standing_envs": 1.0},
+                    },
+                    "reward": {
+                        "scales": {"alive": 2.0},
+                        "mode": {"enabled": True},
+                    },
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        mod,
+        "resolve_task_checkpoint_path",
+        lambda *args, **kwargs: (checkpoint, tmp_path),
+    )
+    args = types.SimpleNamespace(
+        task="G1WalkFlat",
+        load_run="run",
+        checkpoint=None,
+        algo_log_name="fast_sac",
+        log_root=None,
+    )
+
+    merged = mod._apply_checkpoint_env_contract(
+        {
+            "mode_observation": False,
+            "commands": {"rel_standing_envs": 0.0},
+            "reward_config": {"scales": {}},
+        },
+        args,
+    )
+
+    assert merged["mode_observation"] is True
+    assert merged["commands"]["rel_standing_envs"] == 1.0
+    assert merged["reward_config"]["mode"]["enabled"] is True
+
+
 def test_play_interactive_runner_log_dir_uses_algo_log_name(monkeypatch: pytest.MonkeyPatch):
     import types
 

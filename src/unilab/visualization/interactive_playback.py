@@ -21,6 +21,17 @@ def _ensure_scripts_dir(root_dir: str | Path) -> None:
         sys.path.insert(0, str(scripts_dir))
 
 
+def _actor_input_dim_from_state_dict(state_dict: Mapping[str, Any]) -> int | None:
+    for key in ("net.0.weight", "actor.net.0.weight", "mlp.0.weight", "actor.mlp.0.weight"):
+        weight = state_dict.get(key)
+        if isinstance(weight, torch.Tensor) and weight.ndim == 2:
+            return int(weight.shape[1])
+    for key, weight in state_dict.items():
+        if key.endswith(".0.weight") and isinstance(weight, torch.Tensor) and weight.ndim == 2:
+            return int(weight.shape[1])
+    return None
+
+
 @dataclass(frozen=True)
 class RslRlPlaybackConfig:
     """Configuration needed to bootstrap an RSL-RL interactive playback session."""
@@ -736,7 +747,17 @@ def create_sac_playback_session(
             actor = None
         else:
             checkpoint = torch.load(checkpoint_path, map_location=device_name, weights_only=True)
-            actor.load_state_dict(checkpoint["actor"])
+            checkpoint_actor = checkpoint["actor"]
+            checkpoint_obs_dim = _actor_input_dim_from_state_dict(checkpoint_actor)
+            if checkpoint_obs_dim is not None and checkpoint_obs_dim != obs_dim:
+                raise RuntimeError(
+                    "Off-policy checkpoint actor input dim mismatch: "
+                    f"checkpoint={checkpoint_obs_dim}, playback_env_obs={obs_dim}. "
+                    "The playback env contract does not match the selected run_config. "
+                    "For G1 mode-conditioned policies, ensure env.mode_observation is restored "
+                    "from the checkpoint run_config or pass the matching Hydra overrides."
+                )
+            actor.load_state_dict(checkpoint_actor)
             if normalizer is not None and checkpoint.get("obs_normalizer"):
                 normalizer.load_state_dict(checkpoint["obs_normalizer"])
                 normalizer.eval()

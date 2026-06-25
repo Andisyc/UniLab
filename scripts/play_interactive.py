@@ -232,6 +232,52 @@ def _g1_standing_contract_issues(run_config: Mapping[str, Any]) -> list[str]:
     return issues
 
 
+def _resolve_play_checkpoint_path(args: PlayInteractiveArgs) -> Path | None:
+    checkpoint_path, _checkpoint_dir = resolve_task_checkpoint_path(
+        ROOT_DIR,
+        task_name=args.task,
+        load_run=args.load_run,
+        algo_log_name=args.algo_log_name,
+        checkpoint=args.checkpoint,
+        log_root=args.log_root,
+    )
+    return checkpoint_path
+
+
+def _load_checkpoint_run_config(args: PlayInteractiveArgs) -> Mapping[str, Any] | None:
+    checkpoint_path = _resolve_play_checkpoint_path(args)
+    if checkpoint_path is None:
+        return None
+    run_config_path = checkpoint_path.parent / "run_config.json"
+    if not run_config_path.is_file():
+        return None
+    with run_config_path.open("r", encoding="utf-8") as f:
+        run_config = json.load(f)
+    return run_config if isinstance(run_config, Mapping) else None
+
+
+def _apply_checkpoint_env_contract(
+    env_cfg_override: dict[str, Any] | None,
+    args: PlayInteractiveArgs,
+) -> dict[str, Any] | None:
+    """Replay env/reward owner contract from the selected checkpoint run_config."""
+    run_config = _load_checkpoint_run_config(args)
+    if run_config is None:
+        return env_cfg_override
+    run_cfg = run_config.get("config")
+    if not isinstance(run_cfg, Mapping):
+        return env_cfg_override
+
+    merged = dict(env_cfg_override or {})
+    run_env = run_cfg.get("env")
+    if isinstance(run_env, Mapping):
+        merged.update(dict(run_env))
+    run_reward = run_cfg.get("reward")
+    if isinstance(run_reward, Mapping):
+        merged["reward_config"] = dict(run_reward)
+    return merged
+
+
 def _warn_if_g1_sac_checkpoint_lacks_standing_contract(
     *,
     algo: str,
@@ -1107,6 +1153,7 @@ def play_interactive(args, cfg: DictConfig | None = None, *, algo: str | None = 
             from train_offpolicy import build_offpolicy_env_cfg_override
 
             env_cfg_override = build_offpolicy_env_cfg_override(algo, cfg)
+            env_cfg_override = _apply_checkpoint_env_contract(env_cfg_override, args)
         else:
             env_cfg_override = _backend_adapter(cfg, algo_name=algo).build_task_env_cfg_override()
         try:

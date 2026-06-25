@@ -696,6 +696,75 @@ def test_sac_hora_playback_session_updates_priv_info_after_reset_and_step(
     assert captured["deterministic"] is True
 
 
+def test_sac_playback_rejects_checkpoint_obs_dim_mismatch(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    import train_offpolicy
+    from omegaconf import OmegaConf
+
+    import unilab.algos.torch.common.actor_factory as actor_factory
+
+    checkpoint = tmp_path / "model_10.pt"
+    torch.save({"actor": {"net.0.weight": torch.zeros((512, 99))}}, checkpoint)
+
+    class FakeEnv:
+        num_envs = 1
+        obs_groups_spec = {"obs": 98}
+        action_space = SimpleNamespace(shape=(29,))
+        state = SimpleNamespace(info={})
+
+    class FakeActor(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+
+    cfg = OmegaConf.create(
+        {
+            "training": {"task_name": "G1WalkFlat", "device": None},
+            "algo": {
+                "algo_log_name": "fast_sac",
+                "load_run": "run",
+                "actor_hidden_dim": 16,
+                "use_layer_norm": False,
+                "runtime_impl": "sac",
+                "obs_normalization": False,
+            },
+        }
+    )
+
+    monkeypatch.setattr(train_offpolicy, "default_device", lambda torch_module, preferred=None: "cpu")
+    monkeypatch.setattr(train_offpolicy, "resolve_play_obs_dims", lambda spec: (98, 98))
+    monkeypatch.setattr(
+        train_offpolicy,
+        "resolve_play_actor_spec",
+        lambda algo_name, cfg, *, obs_dim, critic_obs_dim: ("sac", {}),
+    )
+    monkeypatch.setattr(
+        train_offpolicy,
+        "resolve_checkpoint_path",
+        lambda *args, **kwargs: (str(checkpoint), str(tmp_path)),
+    )
+    monkeypatch.setattr(actor_factory, "build_actor", lambda *args, **kwargs: FakeActor())
+
+    with pytest.raises(RuntimeError, match="checkpoint=99, playback_env_obs=98"):
+        create_sac_playback_session(
+            playback_cfg=RslRlPlaybackConfig(
+                task="G1WalkFlat",
+                load_run="run",
+                checkpoint=None,
+                action_mode="policy",
+                policy_obs_mode="actor",
+                algo_log_name="fast_sac",
+                log_root=None,
+            ),
+            cfg=cfg,
+            env_factory=lambda num_envs: FakeEnv(),
+            root_dir=tmp_path,
+            device="cpu",
+            log=lambda message: None,
+        )
+
+
 def test_hora_distill_playback_session_loads_stage2_checkpoint_and_student_policy(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
