@@ -685,3 +685,49 @@ Validation:
 - Config test must assert `env.commands.small_xy_threshold == 0.0`.
 - Provider test must sample a low-speed nonzero command and verify it remains nonzero.
 - Provider test must verify the same low-speed command writes `gait_enabled = true`.
+
+## 25. 2026-06-25 Standing Mode Needs Live-Path Diagnostics
+
+Engineering audit after repeated "same as original" behavior:
+
+- The active checkout's Hydra + BackendAdapter + registry path does construct G1 with `rel_standing_envs = 0.4`, `small_xy_threshold = 0.0`, and `reward.mode.enabled = true`.
+- A live reset sentinel shows zero-command standing samples are generated.
+- However, off-policy collector only forwards `info["log"]` keys whose names start with `reward/`.
+- The reward-mode implementation logged masks as `mode/*`, so the training log could not prove whether standing samples entered replay.
+- Mode reward dispatch calls `run_reward_dispatch()` twice. Since that helper clears `info["log"]` on logging cadence, the second call can overwrite the first call's term logs. This makes stand-term diagnostics especially misleading even if the reward itself is computed.
+
+Contract correction:
+
+- Standing mode must have explicit `reward/*` live-path diagnostics.
+- Diagnostics should include the sampled stand/walk fraction and the masked stand/walk reward totals after mode selection.
+- These diagnostics are not new rewards; they only prove that the intended mode path is active in the collector/replay loop.
+
+Validation:
+
+- Unit-test that `_compute_mode_reward()` writes `reward/mode_stand_frac`, `reward/mode_walk_frac`, `reward/stand_total`, and `reward/walk_total` when reward logging is enabled.
+- Keep the existing lifecycle tests for reset-time `gait_enabled` and low-speed nonzero command behavior.
+
+## 26. 2026-06-25 Current Command Owns Gait Mode
+
+Failure after simulation test:
+
+- The policy still steps in place at zero command.
+- Training reset already creates standing samples, and reward-mode diagnostics can show standing samples in the live path.
+- However, play/deploy code can update `info["commands"]` after reset on every control step.
+- `info["gait_enabled"]` was only written during reset, so it can remain `true` after the external command has been changed to zero.
+- In that case, zero command is only zero in the observation vector; reward mode, gait phase, and action-authority logic can still treat the transition as walking.
+
+Contract correction:
+
+- The current external command is the owner of the current gait mode.
+- `commands == 0` means standing.
+- `commands != 0` means walking, independent of command magnitude.
+- `info["gait_enabled"]` is a cached diagnostic/reset field, not an authority that can override the current command.
+- Whenever env logic needs gait mode and `commands` is present, it must recompute and sync `gait_enabled` from the current command batch.
+
+Validation:
+
+- Unit-test that stale `gait_enabled = true` with current zero command is corrected to stand mode.
+- Unit-test that stale `gait_enabled = false` with current nonzero command is corrected to walk mode.
+- Unit-test that reward-mode dispatch follows current command rather than stale reset-time `gait_enabled`.
+- Unit-test that `apply_action()` freezes stand phase after an external command is edited to zero.

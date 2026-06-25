@@ -49,6 +49,23 @@ def test_reward_config_loading_g1():
         assert cfg.reward.pose_weights[8] == 0.05
 
 
+def test_offpolicy_g1_env_override_carries_standing_mode_contract():
+    """BackendAdapter should pass standing-mode config into registry.make."""
+    from pathlib import Path
+
+    from unilab.training import BackendAdapter
+
+    with initialize(config_path="../../conf/offpolicy", version_base="1.3"):
+        cfg = compose(config_name="config", overrides=["task=sac/g1_walk_flat/mujoco"])
+
+    override = BackendAdapter(cfg, root_dir=Path.cwd(), algo_name="sac").build_task_env_cfg_override()
+
+    assert override["commands"]["rel_standing_envs"] == 0.4
+    assert override["commands"]["small_xy_threshold"] == 0.0
+    assert override["reward_config"]["mode"]["enabled"] is True
+    assert "stand_lin_vel_xy_l2" in override["reward_config"]["mode"]["stand_terms"]
+
+
 def test_reward_config_loading_g1_motrix():
     """Test G1 Motrix reward config loads correctly."""
     with initialize(config_path="../../conf/offpolicy", version_base="1.3"):

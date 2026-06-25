@@ -575,7 +575,24 @@ class G1WalkEnv(G1BaseEnv):
             yaw_threshold=cfg.command_yaw_threshold,
         )
 
+    def _current_command_gait_mask(self, info: dict) -> np.ndarray | None:
+        commands = info.get("commands")
+        if commands is None:
+            return None
+
+        commands_arr = np.asarray(commands, dtype=get_global_dtype())
+        if commands_arr.ndim == 1:
+            commands_arr = commands_arr[None, :]
+        if commands_arr.ndim != 2:
+            raise ValueError(f"commands must have shape (N, C), got {commands_arr.shape}")
+        return compute_external_command_mask(commands_arr)
+
     def _gait_enabled_mask(self, info: dict) -> np.ndarray:
+        command_mask = self._current_command_gait_mask(info)
+        if command_mask is not None:
+            info["gait_enabled"] = command_mask
+            return command_mask
+
         if "gait_enabled" not in info:
             return self._command_active_mask(info)
 
@@ -715,8 +732,12 @@ class G1WalkEnv(G1BaseEnv):
         walk_reward = self._run_mode_reward_dispatch(ctx, cfg, mode_cfg.walk_terms)
         walk_mask = self._gait_enabled_mask(ctx.info)
         stand_mask = np.asarray(1.0 - walk_mask, dtype=get_global_dtype())
-        self._log_reward_mode(ctx.info, stand_mask, walk_mask)
-        return np.asarray(stand_mask * stand_reward + walk_mask * walk_reward, dtype=get_global_dtype())
+        reward = np.asarray(
+            stand_mask * stand_reward + walk_mask * walk_reward,
+            dtype=get_global_dtype(),
+        )
+        self._log_reward_mode(ctx.info, stand_mask, walk_mask, stand_reward, walk_reward)
+        return reward
 
     def _run_mode_reward_dispatch(
         self, ctx: RewardContext, cfg: G1RewardConfig, terms: list[str]
@@ -733,13 +754,22 @@ class G1WalkEnv(G1BaseEnv):
         )
 
     def _log_reward_mode(
-        self, info: dict, stand_mask: np.ndarray, walk_mask: np.ndarray
+        self,
+        info: dict,
+        stand_mask: np.ndarray,
+        walk_mask: np.ndarray,
+        stand_reward: np.ndarray,
+        walk_reward: np.ndarray,
     ) -> None:
         if not self._enable_reward_log:
             return
         log = info.get("log", {})
         log["mode/stand_reward_mask"] = float(np.mean(stand_mask))
         log["mode/walk_reward_mask"] = float(np.mean(walk_mask))
+        log["reward/mode_stand_frac"] = float(np.mean(stand_mask))
+        log["reward/mode_walk_frac"] = float(np.mean(walk_mask))
+        log["reward/stand_total"] = float(np.mean(stand_mask * stand_reward))
+        log["reward/walk_total"] = float(np.mean(walk_mask * walk_reward))
         info["log"] = log
 
     def _apply_gait_constraint_bridge(
