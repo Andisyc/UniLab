@@ -225,6 +225,13 @@ def _g1_standing_contract_issues(run_config: Mapping[str, Any]) -> list[str]:
     if freeze_stand_phase is not True:
         issues.append("missing reward.gait_constraint.freeze_phase_in_stand_mode=true")
 
+    stand_action_authority = _nested_get(run_config, "config.env.stand_action_authority")
+    if stand_action_authority is True:
+        issues.append(
+            "env.stand_action_authority=true hard-gates standing actions; "
+            "retrain with false to test learned residual standing"
+        )
+
     feet_phase_scale = _nested_get(run_config, "config.reward.scales.feet_phase", 0.0)
     if float(feet_phase_scale) > 0.0:
         issues.append(f"positive old gait reward config.reward.scales.feet_phase={feet_phase_scale}")

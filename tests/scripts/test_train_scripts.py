@@ -2928,6 +2928,37 @@ def test_play_interactive_replays_checkpoint_env_contract_for_sac_g1(
     assert merged["reward_config"]["mode"]["enabled"] is True
 
 
+def test_play_interactive_warns_about_hard_gated_standing_checkpoint() -> None:
+    mod = _play_interactive()
+
+    issues = mod._g1_standing_contract_issues(
+        {
+            "config": {
+                "env": {
+                    "commands": {"rel_standing_envs": 0.4},
+                    "stand_action_authority": True,
+                },
+                "reward": {
+                    "scales": {"feet_phase": 0.0},
+                    "mode": {
+                        "enabled": True,
+                        "stand_terms": [
+                            "stand_still",
+                            "stand_action_l2",
+                            "stand_dof_vel_l2",
+                            "stand_lin_vel_xy_l2",
+                            "stand_yaw_vel_l2",
+                        ],
+                    },
+                    "gait_constraint": {"freeze_phase_in_stand_mode": True},
+                },
+            }
+        }
+    )
+
+    assert any("stand_action_authority=true" in issue for issue in issues)
+
+
 def test_play_interactive_runner_log_dir_uses_algo_log_name(monkeypatch: pytest.MonkeyPatch):
     import types
 

@@ -39,7 +39,7 @@ def test_reward_config_loading_g1():
         assert cfg.env.commands.small_xy_threshold == 0.0
         assert cfg.env.commands.rel_standing_envs == 0.4
         assert cfg.env.mode_observation is True
-        assert cfg.env.stand_action_authority is True
+        assert cfg.env.stand_action_authority is False
         assert cfg.env.standing_reset_base_qvel_limit == 0.0
         assert cfg.interactive.action_mode == "policy"
         assert cfg.interactive.keyboard is True
@@ -67,7 +67,7 @@ def test_offpolicy_g1_env_override_carries_standing_mode_contract():
     assert override["commands"]["rel_standing_envs"] == 0.4
     assert override["commands"]["small_xy_threshold"] == 0.0
     assert override["mode_observation"] is True
-    assert override["stand_action_authority"] is True
+    assert override["stand_action_authority"] is False
     assert override["standing_reset_base_qvel_limit"] == 0.0
     assert override["reward_config"]["mode"]["enabled"] is True
     assert "stand_lin_vel_xy_l2" in override["reward_config"]["mode"]["stand_terms"]

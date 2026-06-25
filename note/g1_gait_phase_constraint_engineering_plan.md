@@ -1144,3 +1144,46 @@ Validation:
 - Unit-test that SAC/G1 playback env override restores `mode_observation=true` from checkpoint `run_config.json`.
 - Unit-test that a 99-dim SAC actor checkpoint against a 98-dim playback env raises an explicit contract error.
 - Existing G1 stage live-path sentinel still passes.
+
+## 34. 2026-06-25 Standing Must Learn Residual Balance, Not Rely On Action Authority
+
+Observed failure after fixing the playback observation contract:
+
+- `./start.sh` can load the mode-conditioned checkpoint, but the robot falls
+  directly and does not move.
+- This is progress relative to zero-command stepping: the policy is no longer
+  visibly exploiting the walking channel.
+- The remaining symptom matches a standing controller that has no effective
+  residual action in zero-command mode.
+
+Diagnosis:
+
+- The active G1 SAC MuJoCo owner YAML still had
+  `env.stand_action_authority: true`.
+- That setting is the older hard-gate experiment: standing samples record raw
+  policy actions for diagnostics, but execute zero action through the PD target.
+- If `default_angles` alone cannot stabilize the robot, the standing segment
+  collapses while the actor never receives an execution path to learn balance.
+- This contradicts the Step A-F design: `mode_observation` and hard-if reward
+  routing should teach one policy two externally specified modes; action
+  authority is only an ablation/safety switch.
+
+Engineering correction:
+
+- Set the active `conf/offpolicy/task/sac/g1_walk_flat/mujoco.yaml` default to
+  `env.stand_action_authority: false`.
+- Keep all `+g1_walk_stage=*` configs at `stand_action_authority=false`.
+- Keep the action-authority unit tests, because the switch remains useful for
+  diagnosis, but it must not be the default training path.
+- Extend the G1 SAC playback checkpoint warning: a selected run with
+  `env.stand_action_authority=true` is a hard-gated standing run and cannot
+  prove that the policy learned residual standing.
+
+Expected behavior after retraining:
+
+- In zero-command samples, Walking Reward remains invisible.
+- The actor's standing action is actually executed.
+- `reward/stand_raw_action_l1` and `reward/stand_executed_action_l1` should
+  match in standing samples.
+- A successful standing run should reduce drift and termination through learned
+  residual balance, not through env-side action suppression.

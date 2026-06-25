@@ -28,7 +28,7 @@ env:
   mode_observation: true
   reset_base_qvel_limit: 0.5
   standing_reset_base_qvel_limit: 0.0
-  stand_action_authority: true
+  stand_action_authority: false
   curriculum:
     enabled: true
     initial_scale: 0.5
