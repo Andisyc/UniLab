@@ -151,7 +151,7 @@ def test_g1_reset_info_writes_gait_enabled_from_sampled_command() -> None:
     )
 
 
-def test_small_xy_threshold_keeps_low_speed_command_samples() -> None:
+def test_common_small_xy_threshold_zeroes_low_speed_xy_commands() -> None:
     commands = np.asarray(
         [[0.04, 0.0, 0.0], [0.1, 0.0, 0.0]],
         dtype=np.float32,
@@ -161,6 +161,27 @@ def test_small_xy_threshold_keeps_low_speed_command_samples() -> None:
 
     np.testing.assert_allclose(commands[0], np.asarray([0.0, 0.0, 0.0], dtype=np.float32))
     np.testing.assert_allclose(commands[1], np.asarray([0.1, 0.0, 0.0], dtype=np.float32))
+
+
+def test_g1_low_speed_nonzero_command_stays_walk_mode() -> None:
+    provider = G1WalkDomainRandomizationProvider()
+    env = SimpleNamespace(
+        cfg=SimpleNamespace(
+            commands=SimpleNamespace(
+                vel_limit=[[0.03, 0.0, 0.0], [0.03, 0.0, 0.0]],
+                small_xy_threshold=0.0,
+                rel_standing_envs=0.0,
+                heading_command=False,
+            ),
+            gait_phase_init_mode="offset_phase",
+        )
+    )
+
+    commands = provider._sample_commands(env, 4)
+    updates = provider._build_extra_info_updates_for_commands(env, 4, commands)
+
+    np.testing.assert_allclose(commands, np.asarray([[0.03, 0.0, 0.0]] * 4, dtype=np.float32))
+    np.testing.assert_array_equal(updates["gait_enabled"], np.ones((4,), dtype=np.float32))
 
 
 def test_gait_phase_violation_zero_when_feet_match_generator() -> None:

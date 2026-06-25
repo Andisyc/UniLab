@@ -36,7 +36,7 @@ def test_reward_config_loading_g1():
             3.141592653589793,
         ]
         assert cfg.env.commands.vel_limit[0] == [-0.3, -0.2, -0.4]
-        assert cfg.env.commands.small_xy_threshold == 0.05
+        assert cfg.env.commands.small_xy_threshold == 0.0
         assert cfg.env.commands.rel_standing_envs == 0.4
         assert cfg.env.stand_action_authority is False
         assert cfg.reward.mode.enabled is True

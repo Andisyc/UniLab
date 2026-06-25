@@ -663,3 +663,25 @@ Validation:
 
 - Add a regression test where `env._num_envs` is larger than the reset info batch.
 - Verify `_gait_phase_for_observation()` accepts partial reset batches and still applies stand-phase replacement correctly.
+
+## 24. 2026-06-25 Low-Speed Command Must Not Become Stand Mode
+
+Engineering audit after the first reward-mode implementation:
+
+- The concept says mode is a discrete external event: command absent means standing, command present means walking.
+- The implementation still used `zero_small_xy_commands()` in the G1 reset command sampler.
+- With `small_xy_threshold > 0`, a low-speed nonzero command can be rewritten to zero before `gait_enabled` is computed.
+- That silently reintroduces command magnitude as the mode switch, contradicting Section 22.
+
+Contract correction:
+
+- G1 walking should create standing samples through `rel_standing_envs`, which explicitly writes zero command.
+- Low-speed nonzero commands must remain nonzero and must produce `gait_enabled = true`.
+- `small_xy_threshold` should be zero for the active G1 SAC MuJoCo owner config.
+- The G1 provider fallback threshold should also be zero so missing config does not reintroduce magnitude gating.
+
+Validation:
+
+- Config test must assert `env.commands.small_xy_threshold == 0.0`.
+- Provider test must sample a low-speed nonzero command and verify it remains nonzero.
+- Provider test must verify the same low-speed command writes `gait_enabled = true`.

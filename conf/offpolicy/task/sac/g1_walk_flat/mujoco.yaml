@@ -20,7 +20,7 @@ env:
       - [-0.3, -0.2, -0.4]
       - [0.8, 0.2, 0.4]
     rel_standing_envs: 0.4
-    small_xy_threshold: 0.05
+    small_xy_threshold: 0.0
   gait_phase_init_mode: "offset_phase"
   reset_base_qvel_limit: 0.5
   stand_action_authority: false

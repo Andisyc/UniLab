@@ -333,7 +333,7 @@ class G1WalkDomainRandomizationProvider(LocomotionDRProvider):
         commands = super()._sample_commands(env, num_reset)
         zero_small_xy_commands(
             commands,
-            threshold=float(getattr(env.cfg.commands, "small_xy_threshold", 0.2)),
+            threshold=float(getattr(env.cfg.commands, "small_xy_threshold", 0.0)),
         )
         standing_prob = float(getattr(env.cfg.commands, "rel_standing_envs", 0.0))
         if standing_prob > 0.0:
