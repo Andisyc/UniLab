@@ -812,3 +812,10 @@ Expected next-run sentinel:
 - For standing samples, `reward/stand_executed_action_l1` should be exactly `0.0`.
 - If `reward/stand_raw_action_l1` remains large, the actor has not yet learned standing, but execution authority is still correctly preventing the standing samples from stepping.
 - If `reward/stand_executed_action_l1` is nonzero under zero command, the standing authority contract is not live.
+
+Logging lifecycle correction:
+
+- `apply_action()` runs before reward computation.
+- `rewards.run_reward_dispatch()` creates a fresh `info["log"]` on logging ticks.
+- Therefore action-authority diagnostics written only inside `apply_action()` can be erased before the collector reads `info["log"]`.
+- G1 must re-log action-authority diagnostics at the end of `_compute_reward()`, after reward dispatch and gait-constraint logging.

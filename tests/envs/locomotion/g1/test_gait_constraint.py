@@ -582,6 +582,42 @@ def test_apply_action_logs_stand_action_authority_live_path() -> None:
     assert log["reward/executed_action_l1"] == 14.5
 
 
+def test_reward_logging_preserves_action_authority_after_dispatch() -> None:
+    reward_cfg = _reward_config(
+        freeze_phase_in_stand_mode=True,
+        stand_phase=[np.pi, np.pi],
+    )
+    env = _fake_env(reward_cfg, num_envs=2)
+    env._cfg.stand_action_authority = True
+    env._enable_reward_log = True
+    state = NpEnvState(
+        obs={},
+        reward=np.zeros((2,), dtype=np.float32),
+        terminated=np.zeros((2,), dtype=bool),
+        truncated=np.zeros((2,), dtype=bool),
+        info={
+            "commands": np.asarray([[0.0, 0.0, 0.0], [0.2, 0.0, 0.0]], dtype=np.float32),
+            "gait_phase": np.asarray([[np.pi, np.pi], [3.0, 4.0]], dtype=np.float32),
+            "steps": np.zeros((2,), dtype=np.uint32),
+        },
+    )
+    env.apply_action(np.ones((2, 29), dtype=np.float32), state)
+
+    env._compute_reward(
+        state.info,
+        linvel=np.zeros((2, 3), dtype=np.float32),
+        gyro=np.zeros((2, 3), dtype=np.float32),
+        gravity=np.asarray([[0.0, 0.0, 1.0], [0.0, 0.0, 1.0]], dtype=np.float32),
+        dof_pos=np.zeros((2, 29), dtype=np.float32),
+        dof_vel=np.zeros((2, 29), dtype=np.float32),
+    )
+
+    log = state.info["log"]
+    assert log["reward/action_authority_stand_frac"] == 0.5
+    assert log["reward/stand_raw_action_l1"] == 29.0
+    assert log["reward/stand_executed_action_l1"] == 0.0
+
+
 def test_stand_rewards_only_apply_when_command_inactive() -> None:
     reward_cfg = _reward_config()
     env = _fake_env(reward_cfg, num_envs=2)

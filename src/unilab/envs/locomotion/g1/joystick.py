@@ -657,6 +657,16 @@ class G1WalkEnv(G1BaseEnv):
             log["reward/stand_executed_action_l1"] = 0.0
         info["log"] = log
 
+    def _log_current_action_authority(self, info: dict) -> None:
+        if not self._cfg.stand_action_authority:
+            return
+        raw_actions = info.get("current_actions")
+        exec_actions = info.get("executed_actions")
+        if raw_actions is None or exec_actions is None:
+            return
+        active = self._gait_enabled_mask(info).astype(bool)
+        self._log_action_authority(info, raw_actions, exec_actions, active)
+
     def _gait_phase_for_observation(self, info: dict) -> np.ndarray:
         gait_phase = np.asarray(
             info.get("gait_phase", np.zeros((self._num_envs, 2), dtype=get_global_dtype())),
@@ -745,7 +755,9 @@ class G1WalkEnv(G1BaseEnv):
         cfg = self._reward_cfg
         ctx = self._build_reward_context(info, linvel, gyro, gravity, dof_pos, dof_vel)
         reward = self._compute_mode_reward(ctx, cfg)
-        return self._apply_gait_constraint_bridge(ctx, reward)
+        reward = self._apply_gait_constraint_bridge(ctx, reward)
+        self._log_current_action_authority(info)
+        return reward
 
     def _compute_mode_reward(self, ctx: RewardContext, cfg: G1RewardConfig) -> np.ndarray:
         mode_cfg = self._reward_mode_cfg()
