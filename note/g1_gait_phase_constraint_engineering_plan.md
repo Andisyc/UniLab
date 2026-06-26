@@ -1225,3 +1225,221 @@ Validation:
 - Unit-test that `_policy_obs_contains_command()` disables standing sampling
   during the probe and restores `rel_standing_envs` / `vel_limit` afterward.
 - Re-run G1 mode/reward lifecycle tests and the stage live-path sentinel.
+
+## 36. 2026-06-25 Standing Reward Needs A Dense Height Objective
+
+Observed failure after startup became reliable:
+
+- The viewer opens consistently.
+- At zero command, the robot enters simulation and falls almost immediately.
+- When a velocity command is given, the legs respond slightly, so policy load,
+  action execution, and keyboard command injection are not the primary failure.
+
+Diagnosis:
+
+- This is a standing ability failure, not the old zero-command stepping hack.
+- The STAND reward was mostly a collection of "do not move" penalties:
+  drift, yaw drift, joint velocity, action magnitude, pose, orientation, and
+  foot orientation.
+- It did not include the existing `base_height` reward term even though the
+  config already defines `base_height_target=0.754`.
+- The termination condition catches a fall, but it is sparse. For SAC, that is
+  a weak learning signal compared with the dense action/pose penalties that can
+  push the policy toward small actions near `default_angles`.
+- Therefore the policy can learn a quiet but dynamically insufficient standing
+  behavior: no stepping, little action, then fall.
+
+Engineering correction:
+
+- Add `reward.scales.base_height: -80.0` to the active G1 SAC MuJoCo owner YAML.
+- Add `base_height` to `reward.mode.stand_terms`.
+- Do not add it to `walk_terms` in this step. Walking already has tracking and
+  gait objectives; this fix targets zero-command standing only.
+
+Expected effect:
+
+- Zero-command standing samples still cannot receive Walking Reward.
+- Standing samples receive a dense penalty when base height drops below the
+  stand target.
+- The actor is allowed to execute residual standing actions because
+  `stand_action_authority=false`, so it can learn balance instead of relying on
+  env-side action suppression.
+
+Validation:
+
+- Config tests assert that `base_height` is in STAND terms and not in WALK terms.
+- Unit test proves low base height is penalized only for standing samples.
+- Numeric test reads the active Hydra owner YAML and verifies the exact effect:
+  with `base_height=0.300`, `base_height_target=0.754`, `scale=-80.0`, and
+  `ctrl_dt=0.02`, the standing sample receives
+  `-80.0 * (0.300 - 0.754)^2 * 0.02 ~= -0.3298` while the walking sample
+  receives exactly `0.0` from this term.
+- Add `scripts/deploy/check_unilab_g1_standing_mode_dynamics.py` for a true
+  MuJoCo closed-loop check. It supports:
+  - `--action-mode zero`: default/zero action standing dynamics;
+  - `--action-mode policy`: selected SAC checkpoint standing dynamics.
+- Observed local zero-action result:
+  - initial standing state is clean: command `0`, mode signal `0`, height
+    `0.754`, tilt `0`;
+  - zero/default action terminates at step `72`;
+  - max tilt reaches `67.84 deg`, exceeding `max_tilt_deg=65`;
+  - min height remains `0.358`, so the failure is tilt-first rather than
+    height-threshold-first;
+  - `reward/base_height` becomes negative, proving the new reward path is active
+    but not itself a controller.
+- Stage live-path sentinel should still report mode separation and ungated
+  standing action execution.
+
+Interpretation:
+
+- Reward routing and the dense height term are now testable and active.
+- The current default standing controller is not stable.
+- Therefore a trained standing residual policy must be validated with
+  `--action-mode policy`; if that fails too, the next fix is standing controller
+  design/training, not another proof that the reward function is wired.
+
+## 37. 2026-06-25 Standing Reward Priority Must Prefer Balance Over Quietness
+
+Concept correction:
+
+- Because reward routing already separates STAND from WALK, the remaining
+  standing problem is not walking reward leakage.
+- The STAND reward should not mean "output the smallest action near
+  `default_angles`."
+- It should mean "remain upright and at standing height; then be quiet."
+- Balance residuals are allowed in STAND mode. Penalizing all residual action
+  too strongly creates a passive controller that looks calm and then falls.
+
+Engineering correction:
+
+- Add `upright` to the G1 reward function map and to STAND terms.
+- Strengthen first-priority standing terms:
+  - `penalty_orientation: -25.0`;
+  - `penalty_ang_vel_xy: -2.0`;
+  - `base_height: -80.0`;
+  - `upright: 4.0`.
+- Weaken quietness regularizers so they do not dominate balance:
+  - `stand_action_l2: -0.01`;
+  - `stand_still: -0.2`;
+  - `stand_dof_vel_l2: -0.05`;
+  - `pose: -0.1`;
+  - `penalty_feet_ori: -5.0`.
+
+Validation:
+
+- Add a numeric reward-ordering test using the active Hydra owner YAML:
+  - sample A is upright, at target height, but uses moderate residual action;
+  - sample B is quiet, low, and tilted near failure;
+  - sample A must receive positive STAND reward;
+  - sample B must receive negative STAND reward;
+  - sample A must exceed sample B by a large margin.
+- The zero-action MuJoCo dynamics test is still expected to fail because reward
+  changes do not turn the default PD target into a controller. The policy-mode
+  version is the real standing-controller acceptance test after retraining.
+
+## 38. 2026-06-25 Standing Is Zero-Command Locomotion, Not A Separate Static Pose Task
+
+Concept correction:
+
+- Standing and walking share the same first-order physical objective: keep the
+  robot dynamically balanced, upright, at usable base height, and smooth enough
+  for the PD/action interface to remain controllable.
+- The mode routing should only remove the hacking channel: zero-command samples
+  must not receive command-tracking or gait-progression reward.
+- Routing must not make STAND a different task whose primary objective is
+  "small action near default pose." That makes STAND weaker than WALK exactly
+  where the robot needs active residual balance.
+- Therefore STAND is better modeled as the zero-command simplification of the
+  locomotion task:
+
+```text
+reward =
+  balance_common_terms
+  + stand_mode * zero_command_terms
+  + walk_mode  * walking_tracking_terms
+```
+
+Engineering contract:
+
+- `balance_common_terms` enter both STAND and WALK:
+  - `penalty_orientation`;
+  - `upright`;
+  - `penalty_ang_vel_xy`;
+  - `penalty_action_rate`;
+  - `base_height`;
+  - `pose`;
+  - `penalty_feet_ori`;
+  - `alive`.
+- `stand_terms` only express zero-command behavior:
+  - `stand_still`;
+  - `stand_action_l2`;
+  - `stand_dof_vel_l2`;
+  - `stand_lin_vel_xy_l2`;
+  - `stand_yaw_vel_l2`.
+- `walk_terms` only express commanded locomotion:
+  - `tracking_lin_vel`;
+  - `tracking_ang_vel`;
+  - `under_speed`.
+- Positive gait-style terms remain disabled in this stage. Gait pressure still
+  comes from the constraint bridge and only under its configured gate.
+- `penalty_action_rate` is common but must be weaker than the previous walking
+  value (`-1.0` instead of `-4.0` here). Otherwise a necessary first-step
+  standing residual can be ranked below quiet falling, which recreates the
+  passive-controller failure.
+
+Validation:
+
+- Config tests must prove active SAC G1 owner YAML contains
+  `balance_common_terms`, and that `tracking_lin_vel` does not leak into common
+  or STAND terms.
+- Reward-dispatch tests must prove a common term contributes to both STAND and
+  WALK samples while mode-specific terms remain isolated.
+- Numeric tests must now expect `base_height` to penalize low height in both
+  modes; the isolation boundary is no longer `base_height`, but walking command
+  tracking and gait terms.
+
+## 39. 2026-06-25 Standing Reward Must Be Tested As A Dynamics Objective
+
+Problem:
+
+- Static reward tests can prove wiring and scalar ordering, but they cannot
+  prove that the Standing Reward provides an executable standing direction.
+- The meaningful question is not whether `base_height` or `upright` is present.
+  The meaningful question is whether the reward ranks a dynamically standing
+  residual action above the zero/default action that falls.
+
+Diagnostic:
+
+- Extend `scripts/deploy/check_unilab_g1_standing_mode_dynamics.py` with
+  `--action-mode reward-search`.
+- This mode creates a real MuJoCo `G1WalkFlat` env under
+  `+g1_walk_stage=standing_sanity`, disables autoreset, and rolls out many
+  deterministic standing residual-action candidates in parallel.
+- Candidate actions include zero action and symmetric leg-pitch residuals over
+  hip/knee/ankle pitch joints.
+- The acceptance condition is not that every candidate stands. Most candidates
+  are deliberately bad. The acceptance condition is:
+  - the best candidate by cumulative Standing Reward is not zero action;
+  - it survives longer than zero action;
+  - it survives the full tested horizon.
+
+Observed local result:
+
+- Command/mode reset is clean: command `0`, `gait_enabled=0`, mode signal `0`.
+- Zero action terminates at step `72`.
+- The reward-selected best candidate is
+  `symmetric_pitch hip=+0.15 knee=+0.20 ankle=-0.15`.
+- This candidate survives the full `120` step horizon with
+  `max_tilt_deg=58.33` and `min_height=0.656`.
+- Therefore the Standing Reward is now able to rank a dynamically standing
+  residual above the zero/default falling action.
+
+Interpretation:
+
+- This does not prove that SAC will immediately learn the standing controller.
+- It does prove that the reward itself is no longer only a wiring artifact or a
+  static scalar trick: in real MuJoCo dynamics, it contains at least one
+  executable standing optimum near the reset state.
+- If training still falls at zero command, the next suspect becomes exploration,
+  replay distribution, curriculum, or actor optimization, not basic reward
+  direction.

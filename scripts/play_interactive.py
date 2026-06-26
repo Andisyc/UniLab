@@ -1092,6 +1092,28 @@ def _state_policy_obs_contains_command(env: Any) -> bool:
     return _row_contains_contiguous_vector(actor_obs[0], command)
 
 
+def _force_policy_command_probe_obs(env: Any, command: np.ndarray) -> None:
+    state = getattr(env, "state", None)
+    info = getattr(state, "info", None)
+    if not isinstance(info, dict):
+        return
+
+    commands = info.get("commands")
+    if not isinstance(commands, np.ndarray):
+        return
+    if commands.ndim != 2 or commands.shape[1] < 3:
+        return
+
+    commands[:, :3] = np.asarray(command, dtype=commands.dtype)
+
+    update_state = getattr(env, "update_state", None)
+    if not callable(update_state):
+        return
+    refreshed_state = update_state(state)
+    if refreshed_state is not None and refreshed_state is not state:
+        setattr(env, "_state", refreshed_state)
+
+
 def _policy_obs_contains_command(env: Any, *, reset_fn) -> bool:
     if _state_policy_obs_contains_command(env):
         return True
@@ -1108,6 +1130,7 @@ def _policy_obs_contains_command(env: Any, *, reset_fn) -> bool:
         if original_rel_standing_envs is not None:
             cmds_cfg.rel_standing_envs = 0.0
         reset_fn()
+        _force_policy_command_probe_obs(env, _COMMAND_OBS_VERIFY_COMMAND)
         return _state_policy_obs_contains_command(env)
     finally:
         cmds_cfg.vel_limit = original_vel_limit

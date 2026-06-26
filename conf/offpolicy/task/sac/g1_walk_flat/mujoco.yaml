@@ -49,16 +49,18 @@ reward:
     tracking_lin_vel: 2.0
     tracking_ang_vel: 1.5
     under_speed: -0.5
-    penalty_ang_vel_xy: -1.0
-    penalty_orientation: -10.0
-    penalty_action_rate: -4.0
-    stand_still: -2.0
-    stand_action_l2: -2.0
-    stand_dof_vel_l2: -0.15
-    stand_lin_vel_xy_l2: -30.0
-    stand_yaw_vel_l2: -10.0
-    pose: -0.5
-    penalty_feet_ori: -20.0
+    penalty_ang_vel_xy: -2.0
+    penalty_orientation: -25.0
+    penalty_action_rate: -1.0
+    upright: 4.0
+    stand_still: -0.2
+    stand_action_l2: -0.01
+    stand_dof_vel_l2: -0.05
+    stand_lin_vel_xy_l2: -20.0
+    stand_yaw_vel_l2: -5.0
+    base_height: -80.0
+    pose: -0.1
+    penalty_feet_ori: -5.0
     feet_phase: 0.0
     feet_phase_contrast: 0.0
     feet_phase_contact: 0.0
@@ -73,27 +75,25 @@ reward:
   close_feet_threshold: 0.15
   mode:
     enabled: true
-    stand_terms:
+    balance_common_terms:
       - penalty_orientation
+      - upright
       - penalty_ang_vel_xy
+      - penalty_action_rate
+      - base_height
+      - pose
+      - penalty_feet_ori
+      - alive
+    stand_terms:
       - stand_still
       - stand_action_l2
       - stand_dof_vel_l2
       - stand_lin_vel_xy_l2
       - stand_yaw_vel_l2
-      - pose
-      - penalty_feet_ori
-      - alive
     walk_terms:
       - tracking_lin_vel
       - tracking_ang_vel
       - under_speed
-      - penalty_orientation
-      - penalty_ang_vel_xy
-      - penalty_action_rate
-      - pose
-      - penalty_feet_ori
-      - alive
   gait_constraint:
     enabled: true
     command_xy_threshold: 0.05

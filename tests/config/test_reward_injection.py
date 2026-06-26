@@ -17,11 +17,14 @@ def test_reward_config_loading_g1():
         assert cfg.reward.scales.feet_phase_contrast == 0.0
         assert cfg.reward.scales.feet_phase_contact == 0.0
         assert cfg.reward.scales.alive == 2.0
-        assert cfg.reward.scales.stand_still == -2.0
-        assert cfg.reward.scales.stand_action_l2 == -2.0
-        assert cfg.reward.scales.stand_dof_vel_l2 == -0.15
-        assert cfg.reward.scales.stand_lin_vel_xy_l2 == -30.0
-        assert cfg.reward.scales.stand_yaw_vel_l2 == -10.0
+        assert cfg.reward.scales.upright == 4.0
+        assert cfg.reward.scales.stand_still == -0.2
+        assert cfg.reward.scales.stand_action_l2 == -0.01
+        assert cfg.reward.scales.stand_dof_vel_l2 == -0.05
+        assert cfg.reward.scales.stand_lin_vel_xy_l2 == -20.0
+        assert cfg.reward.scales.stand_yaw_vel_l2 == -5.0
+        assert cfg.reward.scales.base_height == -80.0
+        assert cfg.reward.scales.penalty_action_rate == -1.0
         assert cfg.reward.tracking_sigma == 0.12
         assert cfg.reward.base_height_target == 0.754
         assert cfg.reward.gait_constraint.enabled is True
@@ -44,8 +47,18 @@ def test_reward_config_loading_g1():
         assert cfg.interactive.action_mode == "policy"
         assert cfg.interactive.keyboard is True
         assert cfg.reward.mode.enabled is True
+        assert "penalty_orientation" in cfg.reward.mode.balance_common_terms
+        assert "upright" in cfg.reward.mode.balance_common_terms
+        assert "penalty_ang_vel_xy" in cfg.reward.mode.balance_common_terms
+        assert "penalty_action_rate" in cfg.reward.mode.balance_common_terms
+        assert "base_height" in cfg.reward.mode.balance_common_terms
+        assert "pose" in cfg.reward.mode.balance_common_terms
+        assert "penalty_feet_ori" in cfg.reward.mode.balance_common_terms
+        assert "alive" in cfg.reward.mode.balance_common_terms
         assert "tracking_lin_vel" not in cfg.reward.mode.stand_terms
+        assert "tracking_lin_vel" not in cfg.reward.mode.balance_common_terms
         assert "stand_lin_vel_xy_l2" in cfg.reward.mode.stand_terms
+        assert "base_height" not in cfg.reward.mode.stand_terms
         assert "stand_lin_vel_xy_l2" not in cfg.reward.mode.walk_terms
         assert "tracking_lin_vel" in cfg.reward.mode.walk_terms
         assert "stand_action_l2" not in cfg.reward.mode.walk_terms
@@ -70,6 +83,8 @@ def test_offpolicy_g1_env_override_carries_standing_mode_contract():
     assert override["stand_action_authority"] is False
     assert override["standing_reset_base_qvel_limit"] == 0.0
     assert override["reward_config"]["mode"]["enabled"] is True
+    assert "base_height" in override["reward_config"]["mode"]["balance_common_terms"]
+    assert "tracking_lin_vel" not in override["reward_config"]["mode"]["balance_common_terms"]
     assert "stand_lin_vel_xy_l2" in override["reward_config"]["mode"]["stand_terms"]
 
 

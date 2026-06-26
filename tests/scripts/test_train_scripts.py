@@ -2996,6 +2996,46 @@ def test_play_interactive_command_obs_probe_disables_standing_sampling() -> None
     assert env.cfg.commands.vel_limit == [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]
 
 
+def test_play_interactive_command_obs_probe_refreshes_stale_reset_command() -> None:
+    mod = _play_interactive()
+
+    class Cfg:
+        commands = types.SimpleNamespace(
+            vel_limit=[[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]],
+            rel_standing_envs=0.4,
+        )
+
+    class State:
+        info: dict[str, Any]
+        obs: dict[str, np.ndarray]
+
+    class Env:
+        cfg = Cfg()
+        state = State()
+
+        def update_state(self, state: State) -> State:
+            command = state.info["commands"][0, :3]
+            state.obs = {
+                "obs": np.concatenate([np.zeros(5, dtype=np.float32), command])[None, :]
+            }
+            return state
+
+    env = Env()
+    reset_count = 0
+
+    def reset_fn() -> None:
+        nonlocal reset_count
+        reset_count += 1
+        command = np.zeros(3, dtype=np.float32)
+        env.state.info = {"commands": command[None, :]}
+        env.state.obs = {"obs": np.concatenate([np.zeros(5, dtype=np.float32), command])[None, :]}
+
+    assert mod._policy_obs_contains_command(env, reset_fn=reset_fn) is True
+    assert reset_count == 2
+    assert env.cfg.commands.rel_standing_envs == 0.4
+    assert env.cfg.commands.vel_limit == [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]
+
+
 def test_play_interactive_runner_log_dir_uses_algo_log_name(monkeypatch: pytest.MonkeyPatch):
     import types
 

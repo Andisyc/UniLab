@@ -214,6 +214,7 @@ class GaitConstraintConfig:
 @dataclass
 class RewardModeConfig:
     enabled: bool = False
+    balance_common_terms: list[str] = field(default_factory=list)
     stand_terms: list[str] = field(default_factory=list)
     walk_terms: list[str] = field(default_factory=list)
 
@@ -477,6 +478,7 @@ class G1WalkEnv(G1BaseEnv):
             "lin_vel_z": rewards.lin_vel_z,
             "orientation": rewards.orientation,
             "penalty_orientation": rewards.orientation,
+            "upright": rewards.upright,
             "ang_vel_xy": rewards.ang_vel_xy,
             "penalty_ang_vel_xy": rewards.ang_vel_xy,
             "action_rate": rewards.action_rate,
@@ -824,15 +826,32 @@ class G1WalkEnv(G1BaseEnv):
         walk_mask = self._gait_enabled_mask(ctx.info)
         stand_mask = np.asarray(1.0 - walk_mask, dtype=get_global_dtype())
         self._reset_mode_reward_log(ctx.info)
+        stand_terms = self._combine_mode_terms(
+            mode_cfg.balance_common_terms, mode_cfg.stand_terms
+        )
+        walk_terms = self._combine_mode_terms(
+            mode_cfg.balance_common_terms, mode_cfg.walk_terms
+        )
         stand_reward = self._run_masked_mode_reward_dispatch(
-            ctx, cfg, mode_cfg.stand_terms, stand_mask
+            ctx, cfg, stand_terms, stand_mask
         )
         walk_reward = self._run_masked_mode_reward_dispatch(
-            ctx, cfg, mode_cfg.walk_terms, walk_mask
+            ctx, cfg, walk_terms, walk_mask
         )
         reward = np.asarray(stand_reward + walk_reward, dtype=get_global_dtype())
         self._log_reward_mode(ctx.info, stand_mask, walk_mask, stand_reward, walk_reward)
         return reward
+
+    @staticmethod
+    def _combine_mode_terms(common_terms: list[str], mode_terms: list[str]) -> list[str]:
+        terms: list[str] = []
+        seen: set[str] = set()
+        for name in [*common_terms, *mode_terms]:
+            if name in seen:
+                continue
+            seen.add(name)
+            terms.append(name)
+        return terms
 
     def _reset_mode_reward_log(self, info: dict) -> None:
         step_count = info.get("steps", np.zeros((self._num_envs,), dtype=np.uint32))

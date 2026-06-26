@@ -1,6 +1,8 @@
 from types import SimpleNamespace
 
 import numpy as np
+from hydra import compose, initialize
+from omegaconf import OmegaConf
 
 from unilab.base.np_env import NpEnvState
 from unilab.envs.locomotion.common.commands import zero_small_xy_commands
@@ -76,6 +78,12 @@ def _fake_env(reward_cfg: G1WalkRewardConfig, *, num_envs: int = 1) -> G1WalkEnv
             ),
             "right_foot_pos": np.tile(
                 np.asarray([[0.0, 0.0, 0.5]], dtype=np.float32), (num_envs, 1)
+            ),
+            "left_foot_quat": np.tile(
+                np.asarray([[1.0, 0.0, 0.0, 0.0]], dtype=np.float32), (num_envs, 1)
+            ),
+            "right_foot_quat": np.tile(
+                np.asarray([[1.0, 0.0, 0.0, 0.0]], dtype=np.float32), (num_envs, 1)
             ),
             "left_foot_contact_0": np.zeros((num_envs,), dtype=np.float32),
             "left_foot_contact_1": np.zeros((num_envs,), dtype=np.float32),
@@ -400,6 +408,7 @@ def test_reward_config_converts_reward_mode_dict() -> None:
         max_tilt_deg=65.0,
         mode={
             "enabled": True,
+            "balance_common_terms": ["base_height"],
             "stand_terms": ["stand_lin_vel_xy_l2"],
             "walk_terms": ["tracking_lin_vel"],
         },
@@ -408,6 +417,7 @@ def test_reward_config_converts_reward_mode_dict() -> None:
 
     assert isinstance(cfg.mode, RewardModeConfig)
     assert cfg.mode.enabled is True
+    assert cfg.mode.balance_common_terms == ["base_height"]
     assert cfg.mode.stand_terms == ["stand_lin_vel_xy_l2"]
     assert cfg.mode.walk_terms == ["tracking_lin_vel"]
 
@@ -471,6 +481,7 @@ def test_reset_observation_accepts_partial_gait_enabled_batch() -> None:
 def test_reward_mode_dispatch_separates_stand_and_walk_terms() -> None:
     reward_cfg = G1WalkRewardConfig(
         scales={
+            "alive": 2.0,
             "stand_lin_vel_xy_l2": -30.0,
             "tracking_lin_vel": 2.0,
         },
@@ -484,6 +495,7 @@ def test_reward_mode_dispatch_separates_stand_and_walk_terms() -> None:
         gait_constraint=GaitConstraintConfig(enabled=False),
         mode=RewardModeConfig(
             enabled=True,
+            balance_common_terms=["alive"],
             stand_terms=["stand_lin_vel_xy_l2"],
             walk_terms=["tracking_lin_vel"],
         ),
@@ -511,8 +523,18 @@ def test_reward_mode_dispatch_separates_stand_and_walk_terms() -> None:
     reward = env._compute_mode_reward(ctx, reward_cfg)
 
     np.testing.assert_array_equal(ctx.info["gait_enabled"], np.asarray([0.0, 1.0], dtype=np.float32))
-    assert reward[0] < 0.0
+    assert reward[0] > 0.0
     assert reward[1] > 0.0
+    np.testing.assert_allclose(
+        reward[0],
+        (2.0 - 30.0 * 0.01) * env._cfg.ctrl_dt,
+        rtol=1.0e-6,
+    )
+    np.testing.assert_allclose(
+        reward[1],
+        (2.0 + 2.0) * env._cfg.ctrl_dt,
+        rtol=1.0e-6,
+    )
 
 
 def test_walking_reward_is_hard_gated_out_of_standing_samples() -> None:
@@ -607,6 +629,185 @@ def test_standing_reward_is_hard_gated_out_of_walking_samples() -> None:
     assert reward[1] == 0.0
     assert ctx.info["log"]["reward/stand_total"] < 0.0
     assert ctx.info["log"]["reward/walk_total"] == 0.0
+
+
+def test_common_base_height_reward_applies_to_stand_and_walk() -> None:
+    reward_cfg = G1WalkRewardConfig(
+        scales={"base_height": -80.0},
+        tracking_sigma=0.12,
+        gait_frequency=1.5,
+        feet_phase_swing_height=0.09,
+        feet_phase_tracking_sigma=0.04,
+        base_height_target=0.754,
+        min_base_height=0.3,
+        max_tilt_deg=65.0,
+        gait_constraint=GaitConstraintConfig(enabled=False),
+        mode=RewardModeConfig(
+            enabled=True,
+            balance_common_terms=["base_height"],
+            stand_terms=[],
+            walk_terms=[],
+        ),
+        pose_weights=[0.01] * 29,
+    )
+    env = _fake_env(reward_cfg, num_envs=2)
+    env._enable_reward_log = True
+    ctx = RewardContext(
+        info={
+            "commands": np.asarray([[0.0, 0.0, 0.0], [0.2, 0.0, 0.0]], dtype=np.float32),
+            "steps": np.zeros((2,), dtype=np.uint32),
+        },
+        linvel=np.zeros((2, 3), dtype=np.float32),
+        gyro=np.zeros((2, 3), dtype=np.float32),
+        dof_pos=np.zeros((2, 29), dtype=np.float32),
+        dof_vel=np.zeros((2, 29), dtype=np.float32),
+        num_envs=2,
+        default_angles=np.zeros((29,), dtype=np.float32),
+        tracking_sigma=reward_cfg.tracking_sigma,
+        base_height_target=reward_cfg.base_height_target,
+        base_height=np.asarray([0.3, 0.3], dtype=np.float32),
+        gravity=np.asarray([[0.0, 0.0, 1.0], [0.0, 0.0, 1.0]], dtype=np.float32),
+        pose_weights=np.ones((29,), dtype=np.float32),
+    )
+
+    reward = env._compute_mode_reward(ctx, reward_cfg)
+
+    assert reward[0] < 0.0
+    assert reward[1] < 0.0
+    np.testing.assert_allclose(reward[0], reward[1])
+    assert ctx.info["log"]["reward/base_height"] < 0.0
+    assert ctx.info["log"]["reward/stand_total"] < 0.0
+    assert ctx.info["log"]["reward/walk_total"] < 0.0
+
+
+def test_active_g1_common_base_height_reward_numeric_effect() -> None:
+    with initialize(config_path="../../../../conf/offpolicy", version_base="1.3"):
+        cfg = compose(config_name="config", overrides=["task=sac/g1_walk_flat/mujoco"])
+
+    assert cfg.reward.scales.base_height == -80.0
+    assert "base_height" in cfg.reward.mode.balance_common_terms
+    assert "base_height" not in cfg.reward.mode.stand_terms
+    assert "base_height" not in cfg.reward.mode.walk_terms
+
+    reward_cfg = G1WalkRewardConfig(
+        scales={"base_height": float(cfg.reward.scales.base_height)},
+        tracking_sigma=float(cfg.reward.tracking_sigma),
+        gait_frequency=float(cfg.reward.gait_frequency),
+        feet_phase_swing_height=float(cfg.reward.feet_phase_swing_height),
+        feet_phase_tracking_sigma=float(cfg.reward.feet_phase_tracking_sigma),
+        base_height_target=float(cfg.reward.base_height_target),
+        min_base_height=float(cfg.reward.min_base_height),
+        max_tilt_deg=float(cfg.reward.max_tilt_deg),
+        gait_constraint=GaitConstraintConfig(enabled=False),
+        mode=RewardModeConfig(
+            enabled=True,
+            balance_common_terms=["base_height"],
+            stand_terms=[],
+            walk_terms=[],
+        ),
+        pose_weights=list(OmegaConf.to_container(cfg.reward.pose_weights, resolve=True)),
+    )
+    env = _fake_env(reward_cfg, num_envs=2)
+    env._enable_reward_log = True
+    low_height = 0.300
+    target_height = float(cfg.reward.base_height_target)
+    expected_raw = float(cfg.reward.scales.base_height) * (low_height - target_height) ** 2
+    expected_step = expected_raw * env._cfg.ctrl_dt
+
+    ctx = RewardContext(
+        info={
+            "commands": np.asarray([[0.0, 0.0, 0.0], [0.2, 0.0, 0.0]], dtype=np.float32),
+            "steps": np.zeros((2,), dtype=np.uint32),
+        },
+        linvel=np.zeros((2, 3), dtype=np.float32),
+        gyro=np.zeros((2, 3), dtype=np.float32),
+        dof_pos=np.zeros((2, 29), dtype=np.float32),
+        dof_vel=np.zeros((2, 29), dtype=np.float32),
+        num_envs=2,
+        default_angles=np.zeros((29,), dtype=np.float32),
+        tracking_sigma=reward_cfg.tracking_sigma,
+        base_height_target=target_height,
+        base_height=np.asarray([low_height, low_height], dtype=np.float32),
+        gravity=np.asarray([[0.0, 0.0, 1.0], [0.0, 0.0, 1.0]], dtype=np.float32),
+        pose_weights=np.ones((29,), dtype=np.float32),
+    )
+
+    reward = env._compute_mode_reward(ctx, reward_cfg)
+
+    np.testing.assert_allclose(
+        reward, np.asarray([expected_step, expected_step]), rtol=1e-6
+    )
+    np.testing.assert_allclose(ctx.info["log"]["reward/base_height"], expected_raw, rtol=1e-6)
+    np.testing.assert_allclose(ctx.info["log"]["reward/stand_total"], expected_step / 2.0, rtol=1e-6)
+    np.testing.assert_allclose(ctx.info["log"]["reward/walk_total"], expected_step / 2.0, rtol=1e-6)
+
+
+def test_active_g1_standing_reward_prefers_balanced_residual_over_quiet_fall() -> None:
+    with initialize(config_path="../../../../conf/offpolicy", version_base="1.3"):
+        cfg = compose(config_name="config", overrides=["task=sac/g1_walk_flat/mujoco"])
+
+    common_terms = list(OmegaConf.to_container(cfg.reward.mode.balance_common_terms, resolve=True))
+    stand_terms = list(OmegaConf.to_container(cfg.reward.mode.stand_terms, resolve=True))
+    assert "upright" in common_terms
+    assert "stand_action_l2" in stand_terms
+    assert cfg.reward.scales.upright > 0.0
+    assert abs(float(cfg.reward.scales.stand_action_l2)) < 0.1
+
+    reward_cfg = G1WalkRewardConfig(
+        scales=dict(OmegaConf.to_container(cfg.reward.scales, resolve=True)),
+        tracking_sigma=float(cfg.reward.tracking_sigma),
+        gait_frequency=float(cfg.reward.gait_frequency),
+        feet_phase_swing_height=float(cfg.reward.feet_phase_swing_height),
+        feet_phase_tracking_sigma=float(cfg.reward.feet_phase_tracking_sigma),
+        base_height_target=float(cfg.reward.base_height_target),
+        min_base_height=float(cfg.reward.min_base_height),
+        max_tilt_deg=float(cfg.reward.max_tilt_deg),
+        gait_constraint=GaitConstraintConfig(enabled=False),
+        mode=RewardModeConfig(
+            enabled=True,
+            balance_common_terms=common_terms,
+            stand_terms=stand_terms,
+            walk_terms=[],
+        ),
+        pose_weights=list(OmegaConf.to_container(cfg.reward.pose_weights, resolve=True)),
+    )
+    env = _fake_env(reward_cfg, num_envs=2)
+    env._enable_reward_log = True
+    tilt_rad = np.deg2rad(67.0)
+    residual_action = np.full((29,), 0.25, dtype=np.float32)
+
+    ctx = RewardContext(
+        info={
+            "commands": np.zeros((2, 3), dtype=np.float32),
+            "current_actions": np.stack(
+                [residual_action, np.zeros((29,), dtype=np.float32)], axis=0
+            ),
+            "last_actions": np.zeros((2, 29), dtype=np.float32),
+            "steps": np.zeros((2,), dtype=np.uint32),
+        },
+        linvel=np.zeros((2, 3), dtype=np.float32),
+        gyro=np.zeros((2, 3), dtype=np.float32),
+        dof_pos=np.zeros((2, 29), dtype=np.float32),
+        dof_vel=np.zeros((2, 29), dtype=np.float32),
+        num_envs=2,
+        default_angles=np.zeros((29,), dtype=np.float32),
+        tracking_sigma=reward_cfg.tracking_sigma,
+        base_height_target=float(cfg.reward.base_height_target),
+        base_height=np.asarray([float(cfg.reward.base_height_target), 0.35], dtype=np.float32),
+        gravity=np.asarray(
+            [[0.0, 0.0, 1.0], [np.sin(tilt_rad), 0.0, np.cos(tilt_rad)]],
+            dtype=np.float32,
+        ),
+        pose_weights=np.ones((29,), dtype=np.float32),
+    )
+
+    reward = env._compute_mode_reward(ctx, reward_cfg)
+
+    assert reward[0] > 0.0
+    assert reward[1] < 0.0
+    assert reward[0] > reward[1] + 0.5
+    assert ctx.info["log"]["reward/upright"] > 0.0
+    assert ctx.info["log"]["reward/stand_action_l2"] > -0.01
 
 
 def test_mode_reward_logs_shared_terms_without_overwrite() -> None:
