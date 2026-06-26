@@ -23,6 +23,11 @@ def test_reward_config_loading_g1():
         assert cfg.reward.scales.stand_dof_vel_l2 == -0.05
         assert cfg.reward.scales.stand_lin_vel_xy_l2 == -20.0
         assert cfg.reward.scales.stand_yaw_vel_l2 == -5.0
+        assert cfg.reward.scales.stand_tilt_l2 == -40.0
+        assert cfg.reward.scales.stand_tilt_margin_l2 == -120.0
+        assert cfg.reward.scales.stand_fall_l2 == -500.0
+        assert cfg.reward.scales.stand_base_feet_center_x_l2 == -30.0
+        assert cfg.reward.scales.stand_base_feet_center_y_l2 == -10.0
         assert cfg.reward.scales.base_height == -80.0
         assert cfg.reward.scales.pose == -0.5
         assert cfg.reward.scales.penalty_action_rate == -4.0
@@ -36,7 +41,7 @@ def test_reward_config_loading_g1():
         assert cfg.reward.gait_constraint.contrast_weight == 2.0
         assert cfg.reward.gait_constraint.contact_weight == 1.0
         assert cfg.reward.gait_constraint.epsilon == 0.0
-        assert cfg.reward.gait_constraint.penalty_scale == 2.0
+        assert cfg.reward.gait_constraint.penalty_scale == 0.5
         assert cfg.reward.gait_constraint.stand_phase == [
             3.141592653589793,
             3.141592653589793,
@@ -64,12 +69,31 @@ def test_reward_config_loading_g1():
         assert "pose" in cfg.reward.mode.balance_common_terms
         assert "penalty_feet_ori" in cfg.reward.mode.balance_common_terms
         assert "alive" in cfg.reward.mode.balance_common_terms
+        assert cfg.reward.mode.walk_scale_overrides.tracking_ang_vel == 0.3
+        assert cfg.reward.mode.walk_scale_overrides.pose == 0.0
+        assert cfg.reward.mode.walk_scale_overrides.penalty_action_rate == -0.5
+        assert cfg.reward.mode.walk_scale_overrides.upright == 0.25
+        assert cfg.reward.mode.walk_scale_overrides.penalty_orientation == -0.5
+        assert cfg.reward.mode.walk_scale_overrides.penalty_ang_vel_xy == -0.05
+        assert cfg.reward.mode.walk_scale_overrides.base_height == -5.0
+        assert cfg.reward.mode.walk_scale_overrides.penalty_feet_ori == -1.0
+        assert cfg.reward.mode.walk_scale_overrides.feet_phase == 12.0
+        assert cfg.reward.mode.stand_recovery_scale_overrides.stand_lin_vel_xy_l2 == -6.0
+        assert cfg.reward.mode.stand_recovery_scale_overrides.stand_tilt_margin_l2 == -160.0
         assert "tracking_lin_vel" not in cfg.reward.mode.stand_terms
         assert "tracking_lin_vel" not in cfg.reward.mode.balance_common_terms
         assert "stand_lin_vel_xy_l2" in cfg.reward.mode.stand_terms
         assert "stand_lin_vel_xy_l2" in cfg.reward.mode.stand_recovery_terms
         assert "stand_yaw_vel_l2" in cfg.reward.mode.stand_recovery_terms
         assert "stand_dof_vel_l2" in cfg.reward.mode.stand_recovery_terms
+        assert "stand_tilt_l2" in cfg.reward.mode.stand_terms
+        assert "stand_tilt_l2" in cfg.reward.mode.stand_recovery_terms
+        assert "stand_tilt_margin_l2" in cfg.reward.mode.stand_terms
+        assert "stand_tilt_margin_l2" in cfg.reward.mode.stand_recovery_terms
+        assert "stand_fall_l2" in cfg.reward.mode.stand_terms
+        assert "stand_fall_l2" in cfg.reward.mode.stand_recovery_terms
+        assert "stand_base_feet_center_x_l2" in cfg.reward.mode.stand_terms
+        assert "stand_base_feet_center_x_l2" in cfg.reward.mode.stand_recovery_terms
         assert "stand_still" not in cfg.reward.mode.stand_recovery_terms
         assert "stand_action_l2" not in cfg.reward.mode.stand_recovery_terms
         assert "base_height" not in cfg.reward.mode.stand_terms
@@ -109,6 +133,18 @@ def test_offpolicy_g1_env_override_carries_standing_mode_contract():
     assert override["reward_config"]["stand_recovery_lin_vel_xy_threshold"] == 0.2
     assert override["reward_config"]["stand_recovery_tilt_deg_threshold"] == 8.0
     assert "base_height" in override["reward_config"]["mode"]["balance_common_terms"]
+    assert override["reward_config"]["mode"]["walk_scale_overrides"]["tracking_ang_vel"] == 0.3
+    assert override["reward_config"]["mode"]["walk_scale_overrides"]["pose"] == 0.0
+    assert override["reward_config"]["mode"]["walk_scale_overrides"]["penalty_action_rate"] == -0.5
+    assert override["reward_config"]["mode"]["walk_scale_overrides"]["upright"] == 0.25
+    assert override["reward_config"]["mode"]["walk_scale_overrides"]["penalty_orientation"] == -0.5
+    assert override["reward_config"]["mode"]["walk_scale_overrides"]["penalty_ang_vel_xy"] == -0.05
+    assert override["reward_config"]["mode"]["walk_scale_overrides"]["base_height"] == -5.0
+    assert override["reward_config"]["mode"]["walk_scale_overrides"]["penalty_feet_ori"] == -1.0
+    assert override["reward_config"]["gait_constraint"]["penalty_scale"] == 0.5
+    assert override["reward_config"]["mode"]["walk_scale_overrides"]["feet_phase"] == 12.0
+    assert override["reward_config"]["mode"]["stand_recovery_scale_overrides"]["stand_lin_vel_xy_l2"] == -6.0
+    assert override["reward_config"]["mode"]["stand_recovery_scale_overrides"]["stand_tilt_margin_l2"] == -160.0
     assert "tracking_lin_vel" not in override["reward_config"]["mode"]["balance_common_terms"]
     assert "stand_lin_vel_xy_l2" in override["reward_config"]["mode"]["stand_terms"]
     assert "stand_lin_vel_xy_l2" in override["reward_config"]["mode"]["stand_recovery_terms"]

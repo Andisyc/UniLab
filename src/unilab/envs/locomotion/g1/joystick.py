@@ -249,6 +249,9 @@ class RewardModeConfig:
     stand_terms: list[str] = field(default_factory=list)
     stand_recovery_terms: list[str] = field(default_factory=list)
     walk_terms: list[str] = field(default_factory=list)
+    stand_scale_overrides: dict[str, float] = field(default_factory=dict)
+    stand_recovery_scale_overrides: dict[str, float] = field(default_factory=dict)
+    walk_scale_overrides: dict[str, float] = field(default_factory=dict)
 
 
 @dataclass
@@ -267,6 +270,8 @@ class G1RewardConfig:
     close_feet_threshold: float = 0.15
     stand_feet_x_target: float = 0.0
     stand_feet_y_width_target: float = 0.21
+    stand_base_feet_center_x_target: float = 0.0
+    stand_base_feet_center_y_target: float = 0.0
     gait_constraint: GaitConstraintConfig | dict[str, Any] = field(
         default_factory=GaitConstraintConfig
     )
@@ -361,7 +366,7 @@ class G1WalkDomainRandomizationProvider(LocomotionDRProvider):
 
     def build_reset_plan(self, env: Any, env_ids: np.ndarray):
         plan = super().build_reset_plan(env, env_ids)
-        gait_enabled = compute_external_command_mask(plan.info_updates["commands"]).astype(bool)
+        gait_enabled = self._command_gait_mask(env, plan.info_updates["commands"]).astype(bool)
         standing = ~gait_enabled
         if np.any(standing):
             limit = float(getattr(env.cfg, "standing_reset_base_qvel_limit", 0.0))
@@ -377,13 +382,26 @@ class G1WalkDomainRandomizationProvider(LocomotionDRProvider):
     def _build_extra_info_updates_for_commands(
         self, env: Any, num_reset: int, commands: np.ndarray
     ) -> dict[str, np.ndarray]:
-        gait_enabled = compute_external_command_mask(commands)
+        gait_enabled = self._command_gait_mask(env, commands)
         gait_phase = self._sample_gait_phase(env, num_reset)
         self._apply_standing_reset_phase(env, gait_phase, gait_enabled)
         updates = {"gait_phase": gait_phase, "gait_enabled": gait_enabled}
         if getattr(env.cfg.commands, "heading_command", False):
             updates["heading_commands"] = sample_heading_commands(env, num_reset)
         return updates
+
+    def _command_gait_mask(self, env: Any, commands: np.ndarray) -> np.ndarray:
+        reward_cfg = getattr(env.cfg, "reward_config", None)
+        gait_cfg = getattr(reward_cfg, "gait_constraint", None)
+        if isinstance(gait_cfg, dict):
+            gait_cfg = GaitConstraintConfig(**gait_cfg)
+        if gait_cfg is None:
+            return compute_external_command_mask(commands)
+        return compute_command_active_mask(
+            commands,
+            xy_threshold=float(gait_cfg.command_xy_threshold),
+            yaw_threshold=float(gait_cfg.command_yaw_threshold),
+        )
 
     def _apply_standing_reset_phase(
         self, env: Any, gait_phase: np.ndarray, gait_enabled: np.ndarray
@@ -518,9 +536,14 @@ class G1WalkEnv(G1BaseEnv):
             "stand_dof_vel_l2": self._reward_stand_dof_vel_l2,
             "stand_lin_vel_xy_l2": self._reward_stand_lin_vel_xy_l2,
             "stand_yaw_vel_l2": self._reward_stand_yaw_vel_l2,
+            "stand_tilt_l2": self._reward_stand_tilt_l2,
+            "stand_tilt_margin_l2": self._reward_stand_tilt_margin_l2,
+            "stand_fall_l2": self._reward_stand_fall_l2,
             "stand_feet_x_l2": self._reward_stand_feet_x_l2,
             "stand_feet_y_width_l2": self._reward_stand_feet_y_width_l2,
             "stand_feet_yaw_l2": self._reward_stand_feet_yaw_l2,
+            "stand_base_feet_center_x_l2": self._reward_stand_base_feet_center_x_l2,
+            "stand_base_feet_center_y_l2": self._reward_stand_base_feet_center_y_l2,
             "feet_phase": self._reward_feet_phase,
             "feet_phase_contrast": self._reward_feet_phase_contrast,
             "feet_phase_contact": self._reward_feet_phase_contact,
@@ -660,7 +683,12 @@ class G1WalkEnv(G1BaseEnv):
             commands_arr = commands_arr[None, :]
         if commands_arr.ndim != 2:
             raise ValueError(f"commands must have shape (N, C), got {commands_arr.shape}")
-        return compute_external_command_mask(commands_arr)
+        cfg = self._gait_constraint_cfg()
+        return compute_command_active_mask(
+            commands_arr,
+            xy_threshold=cfg.command_xy_threshold,
+            yaw_threshold=cfg.command_yaw_threshold,
+        )
 
     def _gait_enabled_mask(self, info: dict) -> np.ndarray:
         command_mask = self._current_command_gait_mask(info)
@@ -893,13 +921,17 @@ class G1WalkEnv(G1BaseEnv):
             mode_cfg.balance_common_terms, mode_cfg.walk_terms
         )
         stand_reward = self._run_masked_mode_reward_dispatch(
-            ctx, cfg, stand_terms, stand_static_mask
+            ctx, cfg, stand_terms, stand_static_mask, mode_cfg.stand_scale_overrides
         )
         stand_recovery_reward = self._run_masked_mode_reward_dispatch(
-            ctx, cfg, stand_recovery_terms, stand_recovery_mask
+            ctx,
+            cfg,
+            stand_recovery_terms,
+            stand_recovery_mask,
+            mode_cfg.stand_recovery_scale_overrides,
         )
         walk_reward = self._run_masked_mode_reward_dispatch(
-            ctx, cfg, walk_terms, walk_mask
+            ctx, cfg, walk_terms, walk_mask, mode_cfg.walk_scale_overrides
         )
         reward = np.asarray(stand_reward + stand_recovery_reward + walk_reward, dtype=get_global_dtype())
         self._log_reward_mode(
@@ -930,11 +962,24 @@ class G1WalkEnv(G1BaseEnv):
             info["log"] = {}
 
     def _run_masked_mode_reward_dispatch(
-        self, ctx: RewardContext, cfg: G1RewardConfig, terms: list[str], mask: np.ndarray
+        self,
+        ctx: RewardContext,
+        cfg: G1RewardConfig,
+        terms: list[str],
+        mask: np.ndarray,
+        scale_overrides: dict[str, float] | None = None,
     ) -> np.ndarray:
         dtype = get_global_dtype()
         term_set = set(terms)
         scales = {name: scale for name, scale in cfg.scales.items() if name in term_set}
+        if scale_overrides:
+            scales.update(
+                {
+                    name: scale
+                    for name, scale in scale_overrides.items()
+                    if name in term_set
+                }
+            )
         reward = np.zeros((ctx.num_envs,), dtype=dtype)
         step_count = ctx.info.get("steps", np.zeros((ctx.num_envs,), dtype=np.uint32))
         should_log = self._enable_reward_log and int(step_count[0]) % 4 == 0
@@ -1188,6 +1233,33 @@ class G1WalkEnv(G1BaseEnv):
             dtype=get_global_dtype(),
         )
 
+    def _reward_stand_tilt_l2(self, ctx: RewardContext):
+        if ctx.gravity is None:
+            return np.zeros((ctx.num_envs,), dtype=get_global_dtype())
+        return np.asarray(
+            np.sum(np.square(ctx.gravity[:, :2]), axis=1) * self._stand_mode_mask(ctx),
+            dtype=get_global_dtype(),
+        )
+
+    def _reward_stand_tilt_margin_l2(self, ctx: RewardContext):
+        if ctx.gravity is None:
+            return np.zeros((ctx.num_envs,), dtype=get_global_dtype())
+        tilt = np.arccos(np.clip(ctx.gravity[:, 2], -1.0, 1.0))
+        soft_limit = np.deg2rad(float(self._reward_cfg.stand_recovery_tilt_deg_threshold))
+        hard_limit = np.deg2rad(float(self._reward_cfg.max_tilt_deg))
+        span = max(float(hard_limit - soft_limit), 1.0e-6)
+        margin = np.maximum((tilt - soft_limit) / span, 0.0)
+        return np.asarray(np.square(margin) * self._stand_mode_mask(ctx), dtype=get_global_dtype())
+
+    def _reward_stand_fall_l2(self, ctx: RewardContext):
+        if ctx.gravity is None or ctx.base_height is None:
+            return np.zeros((ctx.num_envs,), dtype=get_global_dtype())
+        tilt = np.arccos(np.clip(ctx.gravity[:, 2], -1.0, 1.0))
+        fallen = (tilt > np.deg2rad(float(self._reward_cfg.max_tilt_deg))) | (
+            ctx.base_height < float(self._reward_cfg.min_base_height)
+        )
+        return np.asarray(fallen.astype(get_global_dtype()) * self._stand_mode_mask(ctx), dtype=get_global_dtype())
+
     def _reward_stand_feet_x_l2(self, ctx: RewardContext):
         left_foot = self._backend.get_sensor_data("left_foot_pos")
         right_foot = self._backend.get_sensor_data("right_foot_pos")
@@ -1219,10 +1291,37 @@ class G1WalkEnv(G1BaseEnv):
             np.square(relative_yaw) * self._stand_mode_mask(ctx), dtype=get_global_dtype()
         )
 
+    def _reward_stand_base_feet_center_x_l2(self, ctx: RewardContext):
+        delta = self._base_delta_from_feet_center_in_base_yaw_frame()
+        target = float(self._reward_cfg.stand_base_feet_center_x_target)
+        return np.asarray(
+            np.square(delta[:, 0] - target) * self._stand_mode_mask(ctx),
+            dtype=get_global_dtype(),
+        )
+
+    def _reward_stand_base_feet_center_y_l2(self, ctx: RewardContext):
+        delta = self._base_delta_from_feet_center_in_base_yaw_frame()
+        target = float(self._reward_cfg.stand_base_feet_center_y_target)
+        return np.asarray(
+            np.square(delta[:, 1] - target) * self._stand_mode_mask(ctx),
+            dtype=get_global_dtype(),
+        )
+
     def _feet_delta_in_base_yaw_frame(
         self, left_foot: np.ndarray, right_foot: np.ndarray
     ) -> np.ndarray:
         delta = np.asarray(left_foot[:, :2] - right_foot[:, :2], dtype=get_global_dtype())
+        return self._rotate_xy_to_base_yaw_frame(delta)
+
+    def _base_delta_from_feet_center_in_base_yaw_frame(self) -> np.ndarray:
+        left_foot = self._backend.get_sensor_data("left_foot_pos")
+        right_foot = self._backend.get_sensor_data("right_foot_pos")
+        base_pos = self._backend.get_base_pos()
+        feet_center = 0.5 * (left_foot[:, :2] + right_foot[:, :2])
+        delta = np.asarray(base_pos[:, :2] - feet_center, dtype=get_global_dtype())
+        return self._rotate_xy_to_base_yaw_frame(delta)
+
+    def _rotate_xy_to_base_yaw_frame(self, delta: np.ndarray) -> np.ndarray:
         base_yaw = np_yaw_from_quat(self._backend.get_base_quat())
         cos_yaw = np.cos(base_yaw)
         sin_yaw = np.sin(base_yaw)

@@ -63,9 +63,14 @@ reward:
     stand_dof_vel_l2: -0.05
     stand_lin_vel_xy_l2: -20.0
     stand_yaw_vel_l2: -5.0
+    stand_tilt_l2: -40.0
+    stand_tilt_margin_l2: -120.0
+    stand_fall_l2: -500.0
     stand_feet_x_l2: -20.0
     stand_feet_y_width_l2: -10.0
     stand_feet_yaw_l2: -8.0
+    stand_base_feet_center_x_l2: -30.0
+    stand_base_feet_center_y_l2: -10.0
     base_height: -80.0
     pose: -0.5
     penalty_feet_ori: -20.0
@@ -81,6 +86,8 @@ reward:
   stand_recovery_tilt_deg_threshold: 8.0
   stand_feet_x_target: 0.0
   stand_feet_y_width_target: 0.21
+  stand_base_feet_center_x_target: 0.0
+  stand_base_feet_center_y_target: 0.0
   gait_frequency: 1.5
   feet_phase_swing_height: 0.09
   feet_phase_tracking_sigma: 0.004
@@ -102,20 +109,48 @@ reward:
       - stand_dof_vel_l2
       - stand_lin_vel_xy_l2
       - stand_yaw_vel_l2
+      - stand_tilt_l2
+      - stand_tilt_margin_l2
+      - stand_fall_l2
       - stand_feet_x_l2
       - stand_feet_y_width_l2
       - stand_feet_yaw_l2
+      - stand_base_feet_center_x_l2
+      - stand_base_feet_center_y_l2
     stand_recovery_terms:
       - stand_dof_vel_l2
       - stand_lin_vel_xy_l2
       - stand_yaw_vel_l2
+      - stand_tilt_l2
+      - stand_tilt_margin_l2
+      - stand_fall_l2
       - stand_feet_x_l2
       - stand_feet_y_width_l2
       - stand_feet_yaw_l2
+      - stand_base_feet_center_x_l2
+      - stand_base_feet_center_y_l2
+    stand_recovery_scale_overrides:
+      stand_lin_vel_xy_l2: -6.0
+      stand_yaw_vel_l2: -2.0
+      base_height: -35.0
+      pose: -0.25
+      penalty_feet_ori: -8.0
+      stand_tilt_l2: -55.0
+      stand_tilt_margin_l2: -160.0
     walk_terms:
       - tracking_lin_vel
       - tracking_ang_vel
       - feet_phase
+    walk_scale_overrides:
+      tracking_ang_vel: 0.3
+      pose: 0.0
+      penalty_action_rate: -0.5
+      upright: 0.25
+      penalty_orientation: -0.5
+      penalty_ang_vel_xy: -0.05
+      base_height: -5.0
+      penalty_feet_ori: -1.0
+      feet_phase: 12.0
   gait_constraint:
     enabled: true
     command_xy_threshold: 0.05
@@ -124,7 +159,7 @@ reward:
     contrast_weight: 2.0
     contact_weight: 1.0
     epsilon: 0.0
-    penalty_scale: 2.0
+    penalty_scale: 0.5
     apply_in_stand_mode: true
     apply_when_tracking: false
     freeze_phase_in_stand_mode: true

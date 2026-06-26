@@ -212,6 +212,108 @@ def test_stand_feet_geometry_rewards_disable_in_walk_mode() -> None:
     np.testing.assert_allclose(env._reward_stand_feet_yaw_l2(ctx), np.asarray([0.0]))
 
 
+def test_stand_base_feet_center_reward_penalizes_rearward_com() -> None:
+    env = _fake_env(_reward_config())
+    env._backend._values["left_foot_pos"] = np.asarray([[0.0, 0.105, 0.0]], dtype=np.float32)
+    env._backend._values["right_foot_pos"] = np.asarray([[0.0, -0.105, 0.0]], dtype=np.float32)
+    env._backend._values["base_pos"] = np.asarray([[-0.10, 0.02, 0.754]], dtype=np.float32)
+    ctx = _ctx(np.zeros((1, 3), dtype=np.float32), linvel_x=0.0)
+
+    np.testing.assert_allclose(
+        env._reward_stand_base_feet_center_x_l2(ctx), np.asarray([0.01]), atol=1e-7
+    )
+    np.testing.assert_allclose(
+        env._reward_stand_base_feet_center_y_l2(ctx), np.asarray([0.0004]), atol=1e-7
+    )
+
+
+def test_stand_base_feet_center_reward_disables_in_walk_mode() -> None:
+    env = _fake_env(_reward_config())
+    env._backend._values["left_foot_pos"] = np.asarray([[0.0, 0.105, 0.0]], dtype=np.float32)
+    env._backend._values["right_foot_pos"] = np.asarray([[0.0, -0.105, 0.0]], dtype=np.float32)
+    env._backend._values["base_pos"] = np.asarray([[-0.10, 0.02, 0.754]], dtype=np.float32)
+    ctx = _ctx(np.asarray([[0.2, 0.0, 0.0]], dtype=np.float32), linvel_x=0.0)
+
+    np.testing.assert_allclose(env._reward_stand_base_feet_center_x_l2(ctx), 0.0)
+    np.testing.assert_allclose(env._reward_stand_base_feet_center_y_l2(ctx), 0.0)
+
+
+def test_stand_tilt_reward_only_applies_in_stand_mode() -> None:
+    env = _fake_env(_reward_config(), num_envs=2)
+    ctx = RewardContext(
+        info={"commands": np.asarray([[0.0, 0.0, 0.0], [0.2, 0.0, 0.0]], dtype=np.float32)},
+        linvel=np.zeros((2, 3), dtype=np.float32),
+        gyro=np.zeros((2, 3), dtype=np.float32),
+        dof_pos=np.zeros((2, 29), dtype=np.float32),
+        num_envs=2,
+        gravity=np.asarray([[0.3, 0.4, 0.866], [0.3, 0.4, 0.866]], dtype=np.float32),
+    )
+
+    np.testing.assert_allclose(env._reward_stand_tilt_l2(ctx), np.asarray([0.25, 0.0]))
+
+
+def test_stand_tilt_margin_penalizes_near_fall_only_in_stand_mode() -> None:
+    reward_cfg = _reward_config()
+    reward_cfg.stand_recovery_tilt_deg_threshold = 8.0
+    reward_cfg.max_tilt_deg = 65.0
+    env = _fake_env(reward_cfg, num_envs=3)
+    low = np.deg2rad(5.0)
+    high = np.deg2rad(60.0)
+    ctx = RewardContext(
+        info={
+            "commands": np.asarray(
+                [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.2, 0.0, 0.0]], dtype=np.float32
+            )
+        },
+        linvel=np.zeros((3, 3), dtype=np.float32),
+        gyro=np.zeros((3, 3), dtype=np.float32),
+        dof_pos=np.zeros((3, 29), dtype=np.float32),
+        num_envs=3,
+        gravity=np.asarray(
+            [
+                [np.sin(low), 0.0, np.cos(low)],
+                [np.sin(high), 0.0, np.cos(high)],
+                [np.sin(high), 0.0, np.cos(high)],
+            ],
+            dtype=np.float32,
+        ),
+    )
+
+    margin = env._reward_stand_tilt_margin_l2(ctx)
+
+    assert margin[0] == 0.0
+    assert margin[1] > 0.8
+    assert margin[2] == 0.0
+
+
+def test_stand_fall_reward_only_applies_in_stand_mode() -> None:
+    reward_cfg = _reward_config()
+    env = _fake_env(reward_cfg, num_envs=3)
+    tilt = np.deg2rad(70.0)
+    ctx = RewardContext(
+        info={
+            "commands": np.asarray(
+                [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.2, 0.0, 0.0]], dtype=np.float32
+            )
+        },
+        linvel=np.zeros((3, 3), dtype=np.float32),
+        gyro=np.zeros((3, 3), dtype=np.float32),
+        dof_pos=np.zeros((3, 29), dtype=np.float32),
+        num_envs=3,
+        base_height=np.asarray([0.754, 0.2, 0.2], dtype=np.float32),
+        gravity=np.asarray(
+            [
+                [0.0, 0.0, 1.0],
+                [np.sin(tilt), 0.0, np.cos(tilt)],
+                [np.sin(tilt), 0.0, np.cos(tilt)],
+            ],
+            dtype=np.float32,
+        ),
+    )
+
+    np.testing.assert_allclose(env._reward_stand_fall_l2(ctx), np.asarray([0.0, 1.0, 0.0]))
+
+
 def test_feet_phase_reward_rejects_flat_swing_foot_with_sharp_sigma() -> None:
     reward_cfg = _reward_config()
     reward_cfg.feet_phase_tracking_sigma = 0.004
@@ -230,17 +332,20 @@ def test_g1_reset_info_writes_gait_enabled_from_sampled_command() -> None:
         cfg=SimpleNamespace(
             commands=SimpleNamespace(heading_command=False),
             gait_phase_init_mode="offset_phase",
+            reward_config=SimpleNamespace(
+                gait_constraint=GaitConstraintConfig(command_xy_threshold=0.05, command_yaw_threshold=0.05)
+            ),
         )
     )
     commands = np.asarray(
-        [[0.0, 0.0, 0.0], [0.01, 0.0, 0.0], [0.0, 0.0, -0.01]], dtype=np.float32
+        [[0.0, 0.0, 0.0], [0.04, 0.0, 0.0], [0.06, 0.0, -0.01]], dtype=np.float32
     )
 
     updates = provider._build_extra_info_updates_for_commands(env, 3, commands)
 
     assert updates["gait_phase"].shape == (3, 2)
     np.testing.assert_array_equal(
-        updates["gait_enabled"], np.asarray([0.0, 1.0, 1.0], dtype=np.float32)
+        updates["gait_enabled"], np.asarray([0.0, 0.0, 1.0], dtype=np.float32)
     )
 
 
@@ -256,7 +361,7 @@ def test_common_small_xy_threshold_zeroes_low_speed_xy_commands() -> None:
     np.testing.assert_allclose(commands[1], np.asarray([0.1, 0.0, 0.0], dtype=np.float32))
 
 
-def test_g1_low_speed_nonzero_command_stays_walk_mode() -> None:
+def test_g1_low_speed_nonzero_command_stays_transition_stand_mode() -> None:
     provider = G1WalkDomainRandomizationProvider()
     env = SimpleNamespace(
         cfg=SimpleNamespace(
@@ -267,6 +372,9 @@ def test_g1_low_speed_nonzero_command_stays_walk_mode() -> None:
                 heading_command=False,
             ),
             gait_phase_init_mode="offset_phase",
+            reward_config=SimpleNamespace(
+                gait_constraint=GaitConstraintConfig(command_xy_threshold=0.05, command_yaw_threshold=0.05)
+            ),
         )
     )
 
@@ -274,30 +382,33 @@ def test_g1_low_speed_nonzero_command_stays_walk_mode() -> None:
     updates = provider._build_extra_info_updates_for_commands(env, 4, commands)
 
     np.testing.assert_allclose(commands, np.asarray([[0.03, 0.0, 0.0]] * 4, dtype=np.float32))
-    np.testing.assert_array_equal(updates["gait_enabled"], np.ones((4,), dtype=np.float32))
+    np.testing.assert_array_equal(updates["gait_enabled"], np.zeros((4,), dtype=np.float32))
 
 
-def test_g1_transition_command_distribution_stays_walk_mode() -> None:
+def test_g1_transition_command_distribution_uses_gait_threshold() -> None:
     provider = G1WalkDomainRandomizationProvider()
     env = SimpleNamespace(
         cfg=SimpleNamespace(
             commands=SimpleNamespace(
                 vel_limit=[[0.4, 0.0, 0.0], [0.4, 0.0, 0.0]],
-                transition_vel_limit=[[0.12, 0.0, 0.0], [0.12, 0.0, 0.0]],
+                transition_vel_limit=[[0.04, 0.0, 0.0], [0.04, 0.0, 0.0]],
                 small_xy_threshold=0.0,
                 rel_standing_envs=0.0,
                 rel_transition_envs=1.0,
                 heading_command=False,
             ),
             gait_phase_init_mode="offset_phase",
+            reward_config=SimpleNamespace(
+                gait_constraint=GaitConstraintConfig(command_xy_threshold=0.05, command_yaw_threshold=0.05)
+            ),
         )
     )
 
     commands = provider._sample_commands(env, 4)
     updates = provider._build_extra_info_updates_for_commands(env, 4, commands)
 
-    np.testing.assert_allclose(commands, np.asarray([[0.12, 0.0, 0.0]] * 4, dtype=np.float32))
-    np.testing.assert_array_equal(updates["gait_enabled"], np.ones((4,), dtype=np.float32))
+    np.testing.assert_allclose(commands, np.asarray([[0.04, 0.0, 0.0]] * 4, dtype=np.float32))
+    np.testing.assert_array_equal(updates["gait_enabled"], np.zeros((4,), dtype=np.float32))
 
 
 def test_g1_runtime_command_resampling_refreshes_stand_mode() -> None:
@@ -430,7 +541,7 @@ def test_mode_observation_appends_external_gait_signal_to_obs() -> None:
     env = _fake_env(reward_cfg, num_envs=2)
     env._cfg.mode_observation = True
     info = {
-        "commands": np.asarray([[0.0, 0.0, 0.0], [0.01, 0.0, 0.0]], dtype=np.float32),
+        "commands": np.asarray([[0.0, 0.0, 0.0], [0.06, 0.0, 0.0]], dtype=np.float32),
         "current_actions": np.zeros((2, 29), dtype=np.float32),
         "gait_phase": np.asarray([[0.0, np.pi], [1.0, 2.0]], dtype=np.float32),
     }
@@ -588,8 +699,8 @@ def test_reset_observation_accepts_partial_gait_enabled_batch() -> None:
         "commands": np.asarray(
             [
                 [0.0, 0.0, 0.0],
-                [0.01, 0.0, 0.0],
-                [0.0, 0.0, -0.01],
+                [0.06, 0.0, 0.0],
+                [0.0, 0.0, -0.06],
                 [0.0, 0.0, 0.0],
                 [0.2, 0.0, 0.0],
             ],
@@ -943,6 +1054,57 @@ def test_common_base_height_reward_applies_to_stand_and_walk() -> None:
     assert ctx.info["log"]["reward/base_height"] < 0.0
     assert ctx.info["log"]["reward/stand_total"] < 0.0
     assert ctx.info["log"]["reward/walk_total"] < 0.0
+
+
+def test_mode_scale_overrides_allow_walking_specific_common_term_weight() -> None:
+    reward_cfg = G1WalkRewardConfig(
+        scales={"base_height": -80.0},
+        tracking_sigma=0.12,
+        gait_frequency=1.5,
+        feet_phase_swing_height=0.09,
+        feet_phase_tracking_sigma=0.04,
+        base_height_target=0.754,
+        min_base_height=0.3,
+        max_tilt_deg=65.0,
+        gait_constraint=GaitConstraintConfig(enabled=False),
+        mode=RewardModeConfig(
+            enabled=True,
+            balance_common_terms=["base_height"],
+            stand_terms=[],
+            walk_terms=[],
+            walk_scale_overrides={"base_height": -20.0},
+        ),
+        pose_weights=[0.01] * 29,
+    )
+    env = _fake_env(reward_cfg, num_envs=2)
+    env._enable_reward_log = True
+    height = 0.300
+    raw_error = (height - reward_cfg.base_height_target) ** 2
+    expected_stand = -80.0 * raw_error * env._cfg.ctrl_dt
+    expected_walk = -20.0 * raw_error * env._cfg.ctrl_dt
+    ctx = RewardContext(
+        info={
+            "commands": np.asarray([[0.0, 0.0, 0.0], [0.2, 0.0, 0.0]], dtype=np.float32),
+            "steps": np.zeros((2,), dtype=np.uint32),
+        },
+        linvel=np.zeros((2, 3), dtype=np.float32),
+        gyro=np.zeros((2, 3), dtype=np.float32),
+        dof_pos=np.zeros((2, 29), dtype=np.float32),
+        dof_vel=np.zeros((2, 29), dtype=np.float32),
+        num_envs=2,
+        default_angles=np.zeros((29,), dtype=np.float32),
+        tracking_sigma=reward_cfg.tracking_sigma,
+        base_height_target=reward_cfg.base_height_target,
+        base_height=np.asarray([height, height], dtype=np.float32),
+        gravity=np.asarray([[0.0, 0.0, 1.0], [0.0, 0.0, 1.0]], dtype=np.float32),
+        pose_weights=np.ones((29,), dtype=np.float32),
+    )
+
+    reward = env._compute_mode_reward(ctx, reward_cfg)
+
+    np.testing.assert_allclose(reward[0], expected_stand, rtol=1e-6)
+    np.testing.assert_allclose(reward[1], expected_walk, rtol=1e-6)
+    assert abs(reward[1]) < abs(reward[0])
 
 
 def test_active_g1_common_base_height_reward_numeric_effect() -> None:
