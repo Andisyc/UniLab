@@ -21,6 +21,7 @@ from unilab.envs.locomotion.common import rewards
 from unilab.envs.locomotion.common.commands import (
     Commands,
     sample_heading_commands,
+    sample_velocity_commands,
     zero_small_xy_commands,
 )
 from unilab.envs.locomotion.common.domain_rand import DomainRandConfig
@@ -380,8 +381,20 @@ class G1WalkDomainRandomizationProvider(LocomotionDRProvider):
             threshold=float(getattr(env.cfg.commands, "small_xy_threshold", 0.0)),
         )
         standing_prob = float(getattr(env.cfg.commands, "rel_standing_envs", 0.0))
+        transition_prob = float(getattr(env.cfg.commands, "rel_transition_envs", 0.0))
+        standing_prob = min(max(standing_prob, 0.0), 1.0)
+        transition_prob = min(max(transition_prob, 0.0), max(1.0 - standing_prob, 0.0))
+        draw = np.random.uniform(size=(num_reset,))
+        if transition_prob > 0.0:
+            low = np.asarray(env.cfg.commands.transition_vel_limit[0], dtype=get_global_dtype())
+            high = np.asarray(env.cfg.commands.transition_vel_limit[1], dtype=get_global_dtype())
+            transition = (draw >= standing_prob) & (draw < standing_prob + transition_prob)
+            if np.any(transition):
+                commands[transition] = sample_velocity_commands(
+                    np.random.default_rng(), int(np.sum(transition)), low, high
+                )
         if standing_prob > 0.0:
-            standing = np.random.uniform(size=(num_reset,)) < min(standing_prob, 1.0)
+            standing = draw < standing_prob
             commands[standing] = 0.0
         if getattr(env.cfg.commands, "heading_command", False):
             commands[:, 2] = 0.0

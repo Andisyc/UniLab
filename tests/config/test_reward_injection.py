@@ -40,7 +40,12 @@ def test_reward_config_loading_g1():
         ]
         assert cfg.env.commands.vel_limit[0] == [-0.3, -0.2, -0.4]
         assert cfg.env.commands.small_xy_threshold == 0.0
-        assert cfg.env.commands.rel_standing_envs == 0.4
+        assert cfg.env.commands.rel_standing_envs == 0.3
+        assert cfg.env.commands.rel_transition_envs == 0.2
+        assert cfg.env.commands.transition_vel_limit == [
+            [0.05, -0.05, -0.15],
+            [0.25, 0.05, 0.15],
+        ]
         assert cfg.env.mode_observation is True
         assert cfg.env.stand_action_authority is False
         assert cfg.env.standing_reset_base_qvel_limit == 0.0
@@ -77,7 +82,8 @@ def test_offpolicy_g1_env_override_carries_standing_mode_contract():
 
     override = BackendAdapter(cfg, root_dir=Path.cwd(), algo_name="sac").build_task_env_cfg_override()
 
-    assert override["commands"]["rel_standing_envs"] == 0.4
+    assert override["commands"]["rel_standing_envs"] == 0.3
+    assert override["commands"]["rel_transition_envs"] == 0.2
     assert override["commands"]["small_xy_threshold"] == 0.0
     assert override["mode_observation"] is True
     assert override["stand_action_authority"] is False
@@ -112,26 +118,40 @@ def test_offpolicy_g1_action_authority_ablation_is_independently_configurable():
 
 
 @pytest.mark.parametrize(
-    ("stage", "standing_frac", "vel_limit", "reset_qvel", "curriculum_enabled"),
+    (
+        "stage",
+        "standing_frac",
+        "transition_frac",
+        "vel_limit",
+        "transition_vel_limit",
+        "reset_qvel",
+        "curriculum_enabled",
+    ),
     [
         (
             "standing_sanity",
             1.0,
+            0.0,
             [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]],
+            [[0.05, -0.05, -0.15], [0.25, 0.05, 0.15]],
             0.0,
             False,
         ),
         (
             "walking_sanity",
             0.0,
+            0.0,
             [[-0.2, -0.1, -0.2], [0.4, 0.1, 0.2]],
+            [[0.05, -0.05, -0.15], [0.25, 0.05, 0.15]],
             0.5,
             True,
         ),
         (
             "mixed_mode",
-            0.4,
+            0.3,
+            0.2,
             [[-0.3, -0.2, -0.4], [0.8, 0.2, 0.4]],
+            [[0.05, -0.05, -0.15], [0.25, 0.05, 0.15]],
             0.5,
             True,
         ),
@@ -140,7 +160,9 @@ def test_offpolicy_g1_action_authority_ablation_is_independently_configurable():
 def test_offpolicy_g1_training_stage_configs_reach_env_override(
     stage: str,
     standing_frac: float,
+    transition_frac: float,
     vel_limit: list[list[float]],
+    transition_vel_limit: list[list[float]],
     reset_qvel: float,
     curriculum_enabled: bool,
 ):
@@ -165,7 +187,9 @@ def test_offpolicy_g1_training_stage_configs_reach_env_override(
     assert override["standing_reset_base_qvel_limit"] == 0.0
     assert override["reset_base_qvel_limit"] == reset_qvel
     assert override["commands"]["rel_standing_envs"] == standing_frac
+    assert override["commands"]["rel_transition_envs"] == transition_frac
     assert override["commands"]["vel_limit"] == vel_limit
+    assert override["commands"]["transition_vel_limit"] == transition_vel_limit
     assert override["commands"]["small_xy_threshold"] == 0.0
     assert override["curriculum"]["enabled"] is curriculum_enabled
 

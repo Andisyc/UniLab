@@ -201,6 +201,29 @@ def test_g1_low_speed_nonzero_command_stays_walk_mode() -> None:
     np.testing.assert_array_equal(updates["gait_enabled"], np.ones((4,), dtype=np.float32))
 
 
+def test_g1_transition_command_distribution_stays_walk_mode() -> None:
+    provider = G1WalkDomainRandomizationProvider()
+    env = SimpleNamespace(
+        cfg=SimpleNamespace(
+            commands=SimpleNamespace(
+                vel_limit=[[0.4, 0.0, 0.0], [0.4, 0.0, 0.0]],
+                transition_vel_limit=[[0.12, 0.0, 0.0], [0.12, 0.0, 0.0]],
+                small_xy_threshold=0.0,
+                rel_standing_envs=0.0,
+                rel_transition_envs=1.0,
+                heading_command=False,
+            ),
+            gait_phase_init_mode="offset_phase",
+        )
+    )
+
+    commands = provider._sample_commands(env, 4)
+    updates = provider._build_extra_info_updates_for_commands(env, 4, commands)
+
+    np.testing.assert_allclose(commands, np.asarray([[0.12, 0.0, 0.0]] * 4, dtype=np.float32))
+    np.testing.assert_array_equal(updates["gait_enabled"], np.ones((4,), dtype=np.float32))
+
+
 def test_g1_standing_reset_info_uses_stand_phase() -> None:
     provider = G1WalkDomainRandomizationProvider()
     env = SimpleNamespace(

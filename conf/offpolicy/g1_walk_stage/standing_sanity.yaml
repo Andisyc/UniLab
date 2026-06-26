@@ -5,10 +5,10 @@ env:
       - [0.0, 0.0, 0.0]
       - [0.0, 0.0, 0.0]
     rel_standing_envs: 1.0
+    rel_transition_envs: 0.0
     small_xy_threshold: 0.0
   reset_base_qvel_limit: 0.0
   standing_reset_base_qvel_limit: 0.0
   stand_action_authority: false
   curriculum:
     enabled: false
-

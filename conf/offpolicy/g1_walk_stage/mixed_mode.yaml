@@ -4,7 +4,11 @@ env:
     vel_limit:
       - [-0.3, -0.2, -0.4]
       - [0.8, 0.2, 0.4]
-    rel_standing_envs: 0.4
+    rel_standing_envs: 0.3
+    rel_transition_envs: 0.2
+    transition_vel_limit:
+      - [0.05, -0.05, -0.15]
+      - [0.25, 0.05, 0.15]
     small_xy_threshold: 0.0
   reset_base_qvel_limit: 0.5
   standing_reset_base_qvel_limit: 0.0
@@ -14,4 +18,3 @@ env:
     initial_scale: 0.5
     min_scale: 0.5
     max_scale: 1.0
-

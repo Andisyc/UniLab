@@ -22,6 +22,13 @@ class Commands:
     heading_range: list[float] = field(default_factory=lambda: [-3.14, 3.14])
     heading_control_stiffness: float = 0.5
     rel_standing_envs: float = 0.0
+    rel_transition_envs: float = 0.0
+    transition_vel_limit: list[list[float]] = field(
+        default_factory=lambda: [
+            [0.05, -0.05, -0.15],
+            [0.25, 0.05, 0.15],
+        ]
+    )
     small_xy_threshold: float = 0.2
 
 

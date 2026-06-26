@@ -1443,3 +1443,52 @@ Interpretation:
 - If training still falls at zero command, the next suspect becomes exploration,
   replay distribution, curriculum, or actor optimization, not basic reward
   direction.
+
+## 40. 2026-06-26 Transition Is A Mixed-Distribution Bridge, Not A New Stage
+
+Problem:
+
+- After the common-balance reward fix, Standing can be learned without falling,
+  but Walking can degrade into conservative balance-plus-tracking behavior.
+- The failure is not that the system needs another standalone curriculum stage.
+  The failure is that the active mixed distribution jumps directly from
+  zero-command Standing to normal-command Walking.
+- This creates two discontinuities:
+  - a command discontinuity: `command=0` immediately becomes regular walking
+    velocity;
+  - a height/control discontinuity: the policy can learn different body-height
+    transients around the mode boundary even though locomotion height should be
+    a shared invariant.
+
+Design delta:
+
+- Add transition samples inside the same mixed training distribution:
+  - `rel_standing_envs`: strict zero-command Standing samples;
+  - `rel_transition_envs`: low-speed nonzero commands that keep `gait_enabled=1`;
+  - remaining samples: normal Walking commands.
+- Transition is not a third reward mode and not a new training phase.
+- Transition samples use WALK reward routing because their command is nonzero.
+  They only narrow the command range so the policy sees stand-to-walk starts
+  during the same run.
+- `base_height` must remain in `balance_common_terms`. There is one
+  `base_height_target` shared by Standing, Transition, and Walking. Any
+  standing/walking height split would make the visible height jump a learned
+  objective artifact.
+
+Implemented owner contract:
+
+- Main SAC G1 MuJoCo mixed distribution:
+  - `rel_standing_envs: 0.3`;
+  - `rel_transition_envs: 0.2`;
+  - transition command range:
+    `vx in [0.05, 0.25]`, `vy in [-0.05, 0.05]`, `vyaw in [-0.15, 0.15]`.
+- `standing_sanity` and `walking_sanity` keep `rel_transition_envs: 0.0` so
+  they remain pure diagnostics.
+
+Validation expectation:
+
+- Config tests must prove the transition fraction and range reach env override.
+- Reset/helper tests must prove transition commands are nonzero and therefore
+  `gait_enabled=1`.
+- Existing reward-mode tests must continue to prove `base_height` is common and
+  command tracking remains WALK-only.
