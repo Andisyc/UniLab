@@ -20,6 +20,7 @@ from unilab.dtype_config import get_global_dtype
 from unilab.envs.locomotion.common import rewards
 from unilab.envs.locomotion.common.commands import (
     Commands,
+    apply_heading_yaw_feedback,
     sample_heading_commands,
     sample_velocity_commands,
     zero_small_xy_commands,
@@ -62,6 +63,34 @@ def sample_gait_phase_pairs(rng, num_samples: int, mode: str) -> np.ndarray:
 
 def sample_reset_base_qvel(rng, num_samples: int, limit: float) -> np.ndarray:
     return np.asarray(rng.uniform(-limit, limit, size=(num_samples, 6)), dtype=get_global_dtype())
+
+
+def sample_g1_walk_commands(env: Any, num_samples: int) -> np.ndarray:
+    low = np.asarray(env.cfg.commands.vel_limit[0], dtype=get_global_dtype())
+    high = np.asarray(env.cfg.commands.vel_limit[1], dtype=get_global_dtype())
+    commands = sample_velocity_commands(np.random.default_rng(), num_samples, low, high)
+    zero_small_xy_commands(
+        commands,
+        threshold=float(getattr(env.cfg.commands, "small_xy_threshold", 0.0)),
+    )
+    standing_prob = float(getattr(env.cfg.commands, "rel_standing_envs", 0.0))
+    transition_prob = float(getattr(env.cfg.commands, "rel_transition_envs", 0.0))
+    standing_prob = min(max(standing_prob, 0.0), 1.0)
+    transition_prob = min(max(transition_prob, 0.0), max(1.0 - standing_prob, 0.0))
+    draw = np.random.uniform(size=(num_samples,))
+    if transition_prob > 0.0:
+        low = np.asarray(env.cfg.commands.transition_vel_limit[0], dtype=get_global_dtype())
+        high = np.asarray(env.cfg.commands.transition_vel_limit[1], dtype=get_global_dtype())
+        transition = (draw >= standing_prob) & (draw < standing_prob + transition_prob)
+        if np.any(transition):
+            commands[transition] = sample_velocity_commands(
+                np.random.default_rng(), int(np.sum(transition)), low, high
+            )
+    if standing_prob > 0.0:
+        commands[draw < standing_prob] = 0.0
+    if getattr(env.cfg.commands, "heading_command", False):
+        commands[:, 2] = 0.0
+    return commands
 
 
 def build_upper_body_pose_weights(pose_weights: list[float]) -> np.ndarray:
@@ -217,6 +246,7 @@ class RewardModeConfig:
     enabled: bool = False
     balance_common_terms: list[str] = field(default_factory=list)
     stand_terms: list[str] = field(default_factory=list)
+    stand_recovery_terms: list[str] = field(default_factory=list)
     walk_terms: list[str] = field(default_factory=list)
 
 
@@ -231,6 +261,8 @@ class G1RewardConfig:
     min_base_height: float
     max_tilt_deg: float
     min_forward_speed_for_gait_reward: float = 0.0
+    stand_recovery_lin_vel_xy_threshold: float = 0.2
+    stand_recovery_tilt_deg_threshold: float = 8.0
     close_feet_threshold: float = 0.15
     gait_constraint: GaitConstraintConfig | dict[str, Any] = field(
         default_factory=GaitConstraintConfig
@@ -375,30 +407,7 @@ class G1WalkDomainRandomizationProvider(LocomotionDRProvider):
             gait_phase[standing, :] = stand_phase_arr[None, :]
 
     def _sample_commands(self, env: Any, num_reset: int) -> np.ndarray:
-        commands = super()._sample_commands(env, num_reset)
-        zero_small_xy_commands(
-            commands,
-            threshold=float(getattr(env.cfg.commands, "small_xy_threshold", 0.0)),
-        )
-        standing_prob = float(getattr(env.cfg.commands, "rel_standing_envs", 0.0))
-        transition_prob = float(getattr(env.cfg.commands, "rel_transition_envs", 0.0))
-        standing_prob = min(max(standing_prob, 0.0), 1.0)
-        transition_prob = min(max(transition_prob, 0.0), max(1.0 - standing_prob, 0.0))
-        draw = np.random.uniform(size=(num_reset,))
-        if transition_prob > 0.0:
-            low = np.asarray(env.cfg.commands.transition_vel_limit[0], dtype=get_global_dtype())
-            high = np.asarray(env.cfg.commands.transition_vel_limit[1], dtype=get_global_dtype())
-            transition = (draw >= standing_prob) & (draw < standing_prob + transition_prob)
-            if np.any(transition):
-                commands[transition] = sample_velocity_commands(
-                    np.random.default_rng(), int(np.sum(transition)), low, high
-                )
-        if standing_prob > 0.0:
-            standing = draw < standing_prob
-            commands[standing] = 0.0
-        if getattr(env.cfg.commands, "heading_command", False):
-            commands[:, 2] = 0.0
-        return commands
+        return sample_g1_walk_commands(env, num_reset)
 
     def _sample_gait_phase(self, env: Any, num_reset: int) -> np.ndarray:
         mode = env.cfg.gait_phase_init_mode
@@ -518,6 +527,7 @@ class G1WalkEnv(G1BaseEnv):
         return np.asarray(self._backend.get_base_pos()[:, 2], dtype=get_global_dtype())
 
     def update_state(self, state: NpEnvState) -> NpEnvState:
+        self._update_commands(state.info)
         linvel = self.get_local_linvel()
         gyro = self.get_gyro()
         gravity = self._backend.get_sensor_data(self._cfg.sensor.upvector)
@@ -668,6 +678,32 @@ class G1WalkEnv(G1BaseEnv):
             raise ValueError(f"gait_enabled must have shape ({expected_size},), got {mask.shape}")
         return np.asarray(mask > 0.5, dtype=get_global_dtype())
 
+    def _stand_recovery_mask(self, ctx: RewardContext, stand_mask: np.ndarray) -> np.ndarray:
+        speed_xy = np.linalg.norm(ctx.linvel[:, :2], axis=1)
+        if ctx.gravity is None:
+            tilt_deg = np.zeros_like(speed_xy)
+        else:
+            tilt_deg = np.rad2deg(np.arccos(np.clip(ctx.gravity[:, 2], -1.0, 1.0)))
+        recovery = (
+            (speed_xy > float(self._reward_cfg.stand_recovery_lin_vel_xy_threshold))
+            | (tilt_deg > float(self._reward_cfg.stand_recovery_tilt_deg_threshold))
+        )
+        recovery_mask = np.asarray(recovery, dtype=get_global_dtype()) * stand_mask
+        ctx.info["stand_recovery_active"] = recovery_mask
+        return recovery_mask
+
+    def _dynamic_mode_mask(self, info: dict) -> np.ndarray:
+        gait_enabled = self._gait_enabled_mask(info)
+        recovery = np.asarray(
+            info.get("stand_recovery_active", np.zeros_like(gait_enabled)),
+            dtype=get_global_dtype(),
+        )
+        if recovery.ndim == 2 and recovery.shape[1] == 1:
+            recovery = recovery[:, 0]
+        if recovery.shape != gait_enabled.shape:
+            recovery = np.zeros_like(gait_enabled)
+        return np.asarray(np.maximum(gait_enabled, recovery), dtype=get_global_dtype())
+
     def _stand_phase_array(self) -> np.ndarray:
         cfg = self._gait_constraint_cfg()
         stand_phase = np.asarray(cfg.stand_phase, dtype=get_global_dtype())
@@ -676,7 +712,7 @@ class G1WalkEnv(G1BaseEnv):
         return stand_phase
 
     def _actions_for_execution(self, actions: np.ndarray, info: dict) -> np.ndarray:
-        active = self._gait_enabled_mask(info).astype(bool)
+        active = self._dynamic_mode_mask(info).astype(bool)
         if not self._cfg.stand_action_authority:
             self._log_action_authority(info, actions, actions, active)
             return actions
@@ -722,7 +758,7 @@ class G1WalkEnv(G1BaseEnv):
         exec_actions = info.get("executed_actions")
         if raw_actions is None or exec_actions is None:
             return
-        active = self._gait_enabled_mask(info).astype(bool)
+        active = self._dynamic_mode_mask(info).astype(bool)
         self._log_action_authority(info, raw_actions, exec_actions, active)
 
     def _gait_phase_for_observation(self, info: dict) -> np.ndarray:
@@ -733,15 +769,15 @@ class G1WalkEnv(G1BaseEnv):
         cfg = self._gait_constraint_cfg()
         if not (cfg.enabled and cfg.freeze_phase_in_stand_mode):
             return gait_phase
-        active = self._gait_enabled_mask(info).astype(bool)
+        active = self._dynamic_mode_mask(info).astype(bool)
         stand_phase = self._stand_phase_array()
         return np.asarray(
             np.where(active[:, None], gait_phase, stand_phase[None, :]), dtype=get_global_dtype()
         )
 
     def _mode_observation(self, info: dict) -> np.ndarray:
-        gait_enabled = self._gait_enabled_mask(info)
-        return np.asarray(gait_enabled[:, None], dtype=get_global_dtype())
+        dynamic_mode = self._dynamic_mode_mask(info)
+        return np.asarray(dynamic_mode[:, None], dtype=get_global_dtype())
 
     def _uses_walk_observation_profile(self) -> bool:
         scales = getattr(getattr(self, "_reward_cfg", None), "scales", None)
@@ -838,21 +874,37 @@ class G1WalkEnv(G1BaseEnv):
 
         walk_mask = self._gait_enabled_mask(ctx.info)
         stand_mask = np.asarray(1.0 - walk_mask, dtype=get_global_dtype())
+        stand_recovery_mask = self._stand_recovery_mask(ctx, stand_mask)
+        stand_static_mask = np.asarray(stand_mask - stand_recovery_mask, dtype=get_global_dtype())
         self._reset_mode_reward_log(ctx.info)
         stand_terms = self._combine_mode_terms(
             mode_cfg.balance_common_terms, mode_cfg.stand_terms
+        )
+        stand_recovery_terms = self._combine_mode_terms(
+            mode_cfg.balance_common_terms, mode_cfg.stand_recovery_terms
         )
         walk_terms = self._combine_mode_terms(
             mode_cfg.balance_common_terms, mode_cfg.walk_terms
         )
         stand_reward = self._run_masked_mode_reward_dispatch(
-            ctx, cfg, stand_terms, stand_mask
+            ctx, cfg, stand_terms, stand_static_mask
+        )
+        stand_recovery_reward = self._run_masked_mode_reward_dispatch(
+            ctx, cfg, stand_recovery_terms, stand_recovery_mask
         )
         walk_reward = self._run_masked_mode_reward_dispatch(
             ctx, cfg, walk_terms, walk_mask
         )
-        reward = np.asarray(stand_reward + walk_reward, dtype=get_global_dtype())
-        self._log_reward_mode(ctx.info, stand_mask, walk_mask, stand_reward, walk_reward)
+        reward = np.asarray(stand_reward + stand_recovery_reward + walk_reward, dtype=get_global_dtype())
+        self._log_reward_mode(
+            ctx.info,
+            stand_static_mask,
+            stand_recovery_mask,
+            walk_mask,
+            stand_reward,
+            stand_recovery_reward,
+            walk_reward,
+        )
         return reward
 
     @staticmethod
@@ -899,19 +951,28 @@ class G1WalkEnv(G1BaseEnv):
     def _log_reward_mode(
         self,
         info: dict,
-        stand_mask: np.ndarray,
+        stand_static_mask: np.ndarray,
+        stand_recovery_mask: np.ndarray,
         walk_mask: np.ndarray,
         stand_reward: np.ndarray,
+        stand_recovery_reward: np.ndarray,
         walk_reward: np.ndarray,
     ) -> None:
         if not self._enable_reward_log:
             return
         log = info.get("log", {})
-        log["mode/stand_reward_mask"] = float(np.mean(stand_mask))
+        log["mode/stand_reward_mask"] = float(np.mean(stand_static_mask + stand_recovery_mask))
+        log["mode/stand_static_reward_mask"] = float(np.mean(stand_static_mask))
+        log["mode/stand_recovery_reward_mask"] = float(np.mean(stand_recovery_mask))
         log["mode/walk_reward_mask"] = float(np.mean(walk_mask))
-        log["reward/mode_stand_frac"] = float(np.mean(stand_mask))
+        log["reward/mode_stand_frac"] = float(np.mean(stand_static_mask + stand_recovery_mask))
+        log["reward/mode_stand_static_frac"] = float(np.mean(stand_static_mask))
+        log["reward/mode_stand_recovery_frac"] = float(np.mean(stand_recovery_mask))
         log["reward/mode_walk_frac"] = float(np.mean(walk_mask))
-        log["reward/stand_total"] = float(np.mean(stand_mask * stand_reward))
+        log["reward/stand_total"] = float(np.mean(stand_static_mask * stand_reward))
+        log["reward/stand_recovery_total"] = float(
+            np.mean(stand_recovery_mask * stand_recovery_reward)
+        )
         log["reward/walk_total"] = float(np.mean(walk_mask * walk_reward))
         info["log"] = log
 
@@ -1124,6 +1185,55 @@ class G1WalkEnv(G1BaseEnv):
             dtype=get_global_dtype(),
         )
 
+    def _update_commands(self, info: dict) -> None:
+        commands = info.get("commands")
+        if commands is None:
+            return
+
+        commands_arr = np.asarray(commands, dtype=get_global_dtype())
+        resampling_time = float(getattr(self._cfg.commands, "resampling_time", 0.0))
+        if resampling_time > 0.0:
+            interval_steps = max(int(round(resampling_time / self._cfg.ctrl_dt)), 1)
+            steps = np.asarray(info.get("steps", np.zeros((self._num_envs,), dtype=np.uint32)))
+            resample_mask = (steps > 0) & ((steps % interval_steps) == 0)
+            if np.any(resample_mask):
+                num_resample = int(np.count_nonzero(resample_mask))
+                commands_arr[resample_mask] = sample_g1_walk_commands(self, num_resample)
+                if getattr(self._cfg.commands, "heading_command", False):
+                    heading_commands = self._ensure_heading_commands(info, commands_arr.shape[0])
+                    heading_commands[resample_mask] = sample_heading_commands(self, num_resample)
+                    info["heading_commands"] = heading_commands
+
+        if getattr(self._cfg.commands, "heading_command", False):
+            heading_commands = self._ensure_heading_commands(info, commands_arr.shape[0])
+            base_quat = np.asarray(self._backend.get_base_quat(), dtype=get_global_dtype())
+            if base_quat.shape[0] == commands_arr.shape[0]:
+                stiffness = float(getattr(self._cfg.commands, "heading_control_stiffness", 0.5))
+                apply_heading_yaw_feedback(
+                    commands_arr, base_quat, heading_commands, stiffness=stiffness
+                )
+
+        info["commands"] = commands_arr
+        gait_enabled = self._gait_enabled_mask(info)
+        cfg = self._gait_constraint_cfg()
+        if cfg.enabled and cfg.freeze_phase_in_stand_mode:
+            gait_phase = info.get(
+                "gait_phase", np.zeros((commands_arr.shape[0], 2), dtype=get_global_dtype())
+            )
+            gait_phase = np.asarray(gait_phase, dtype=get_global_dtype())
+            inactive = gait_enabled <= 0.5
+            if np.any(inactive):
+                gait_phase[inactive, :] = self._stand_phase_array()
+                info["gait_phase"] = gait_phase
+
+    def _ensure_heading_commands(self, info: dict, num_obs: int) -> np.ndarray:
+        heading_commands = info.get("heading_commands")
+        if heading_commands is None or np.asarray(heading_commands).shape != (num_obs,):
+            heading_commands = sample_heading_commands(self, num_obs)
+        heading_commands = np.asarray(heading_commands, dtype=get_global_dtype())
+        info["heading_commands"] = heading_commands
+        return heading_commands
+
     def apply_action(self, actions: np.ndarray, state: NpEnvState) -> np.ndarray:
         state.info["last_actions"] = state.info.get("current_actions", np.zeros_like(actions))
         state.info["current_actions"] = actions
@@ -1133,7 +1243,7 @@ class G1WalkEnv(G1BaseEnv):
         )
         cfg = self._gait_constraint_cfg()
         if cfg.enabled and cfg.freeze_phase_in_stand_mode:
-            active = self._gait_enabled_mask(state.info).astype(bool)
+            active = self._dynamic_mode_mask(state.info).astype(bool)
             gait_phase[active, 0] = (gait_phase[active, 0] + self._gait_phase_delta) % (
                 2 * np.pi
             )

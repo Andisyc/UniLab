@@ -24,9 +24,12 @@ def test_reward_config_loading_g1():
         assert cfg.reward.scales.stand_lin_vel_xy_l2 == -20.0
         assert cfg.reward.scales.stand_yaw_vel_l2 == -5.0
         assert cfg.reward.scales.base_height == -80.0
+        assert cfg.reward.scales.pose == -0.3
         assert cfg.reward.scales.penalty_action_rate == -1.0
         assert cfg.reward.tracking_sigma == 0.12
         assert cfg.reward.base_height_target == 0.754
+        assert cfg.reward.stand_recovery_lin_vel_xy_threshold == 0.2
+        assert cfg.reward.stand_recovery_tilt_deg_threshold == 8.0
         assert cfg.reward.gait_constraint.enabled is True
         assert cfg.reward.gait_constraint.freeze_phase_in_stand_mode is True
         assert cfg.reward.gait_constraint.apply_in_stand_mode is True
@@ -39,6 +42,7 @@ def test_reward_config_loading_g1():
             3.141592653589793,
         ]
         assert cfg.env.commands.vel_limit[0] == [-0.3, -0.2, -0.4]
+        assert cfg.env.commands.resampling_time == 2.0
         assert cfg.env.commands.small_xy_threshold == 0.0
         assert cfg.env.commands.rel_standing_envs == 0.3
         assert cfg.env.commands.rel_transition_envs == 0.2
@@ -48,7 +52,7 @@ def test_reward_config_loading_g1():
         ]
         assert cfg.env.mode_observation is True
         assert cfg.env.stand_action_authority is False
-        assert cfg.env.standing_reset_base_qvel_limit == 0.0
+        assert cfg.env.standing_reset_base_qvel_limit == 0.5
         assert cfg.interactive.action_mode == "policy"
         assert cfg.interactive.keyboard is True
         assert cfg.reward.mode.enabled is True
@@ -63,6 +67,11 @@ def test_reward_config_loading_g1():
         assert "tracking_lin_vel" not in cfg.reward.mode.stand_terms
         assert "tracking_lin_vel" not in cfg.reward.mode.balance_common_terms
         assert "stand_lin_vel_xy_l2" in cfg.reward.mode.stand_terms
+        assert "stand_lin_vel_xy_l2" in cfg.reward.mode.stand_recovery_terms
+        assert "stand_yaw_vel_l2" in cfg.reward.mode.stand_recovery_terms
+        assert "stand_dof_vel_l2" in cfg.reward.mode.stand_recovery_terms
+        assert "stand_still" not in cfg.reward.mode.stand_recovery_terms
+        assert "stand_action_l2" not in cfg.reward.mode.stand_recovery_terms
         assert "base_height" not in cfg.reward.mode.stand_terms
         assert "feet_phase" not in cfg.reward.mode.stand_terms
         assert "feet_phase_contrast" not in cfg.reward.mode.stand_terms
@@ -90,14 +99,18 @@ def test_offpolicy_g1_env_override_carries_standing_mode_contract():
 
     assert override["commands"]["rel_standing_envs"] == 0.3
     assert override["commands"]["rel_transition_envs"] == 0.2
+    assert override["commands"]["resampling_time"] == 2.0
     assert override["commands"]["small_xy_threshold"] == 0.0
     assert override["mode_observation"] is True
     assert override["stand_action_authority"] is False
-    assert override["standing_reset_base_qvel_limit"] == 0.0
+    assert override["standing_reset_base_qvel_limit"] == 0.5
     assert override["reward_config"]["mode"]["enabled"] is True
+    assert override["reward_config"]["stand_recovery_lin_vel_xy_threshold"] == 0.2
+    assert override["reward_config"]["stand_recovery_tilt_deg_threshold"] == 8.0
     assert "base_height" in override["reward_config"]["mode"]["balance_common_terms"]
     assert "tracking_lin_vel" not in override["reward_config"]["mode"]["balance_common_terms"]
     assert "stand_lin_vel_xy_l2" in override["reward_config"]["mode"]["stand_terms"]
+    assert "stand_lin_vel_xy_l2" in override["reward_config"]["mode"]["stand_recovery_terms"]
 
 
 def test_offpolicy_g1_action_authority_ablation_is_independently_configurable():
@@ -131,6 +144,8 @@ def test_offpolicy_g1_action_authority_ablation_is_independently_configurable():
         "vel_limit",
         "transition_vel_limit",
         "reset_qvel",
+        "standing_reset_qvel",
+        "resampling_time",
         "curriculum_enabled",
     ),
     [
@@ -141,6 +156,8 @@ def test_offpolicy_g1_action_authority_ablation_is_independently_configurable():
             [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]],
             [[0.05, -0.05, -0.15], [0.25, 0.05, 0.15]],
             0.0,
+            0.0,
+            2.0,
             False,
         ),
         (
@@ -150,6 +167,8 @@ def test_offpolicy_g1_action_authority_ablation_is_independently_configurable():
             [[-0.2, -0.1, -0.2], [0.4, 0.1, 0.2]],
             [[0.05, -0.05, -0.15], [0.25, 0.05, 0.15]],
             0.5,
+            0.0,
+            2.0,
             True,
         ),
         (
@@ -159,6 +178,8 @@ def test_offpolicy_g1_action_authority_ablation_is_independently_configurable():
             [[-0.3, -0.2, -0.4], [0.8, 0.2, 0.4]],
             [[0.05, -0.05, -0.15], [0.25, 0.05, 0.15]],
             0.5,
+            0.5,
+            2.0,
             True,
         ),
     ],
@@ -170,6 +191,8 @@ def test_offpolicy_g1_training_stage_configs_reach_env_override(
     vel_limit: list[list[float]],
     transition_vel_limit: list[list[float]],
     reset_qvel: float,
+    standing_reset_qvel: float,
+    resampling_time: float,
     curriculum_enabled: bool,
 ):
     """G1 standing/walking curriculum stages are env-owner config fragments."""
@@ -190,8 +213,9 @@ def test_offpolicy_g1_training_stage_configs_reach_env_override(
 
     assert override["mode_observation"] is True
     assert override["stand_action_authority"] is False
-    assert override["standing_reset_base_qvel_limit"] == 0.0
+    assert override["standing_reset_base_qvel_limit"] == standing_reset_qvel
     assert override["reset_base_qvel_limit"] == reset_qvel
+    assert override["commands"]["resampling_time"] == resampling_time
     assert override["commands"]["rel_standing_envs"] == standing_frac
     assert override["commands"]["rel_transition_envs"] == transition_frac
     assert override["commands"]["vel_limit"] == vel_limit

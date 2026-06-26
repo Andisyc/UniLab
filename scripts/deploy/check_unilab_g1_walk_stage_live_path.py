@@ -85,11 +85,17 @@ def _check_stand_distribution(
 ) -> None:
     stand_mask = gait_enabled <= 0.5
     stand_frac = float(np.mean(stand_mask))
+    mode_mean = _mean(mode_signal)
     if expected.stand == "all":
-        if np.all(stand_mask) and _max_abs(mode_signal) == 0.0:
-            _add(checks, "PASS", f"{stage}: standing mode", f"stand_frac={stand_frac:.3f}")
+        if np.all(stand_mask):
+            _add(
+                checks,
+                "PASS",
+                f"{stage}: standing command distribution",
+                f"stand_frac={stand_frac:.3f}, mode_mean={mode_mean:.3f}",
+            )
         else:
-            _add(checks, "FAIL", f"{stage}: standing mode", f"stand_frac={stand_frac:.3f}")
+            _add(checks, "FAIL", f"{stage}: standing command distribution", f"stand_frac={stand_frac:.3f}")
     elif expected.stand == "none":
         if not np.any(stand_mask) and np.all(mode_signal > 0.5):
             _add(checks, "PASS", f"{stage}: walking mode", f"stand_frac={stand_frac:.3f}")
@@ -222,7 +228,16 @@ def audit_stage(stage: str, *, num_envs: int, seed: int, steps: int) -> tuple[li
         if expected.stand != "none":
             raw = float(log.get("reward/stand_raw_action_l1", -1.0))
             executed = float(log.get("reward/stand_executed_action_l1", -1.0))
-            if raw > 0.0 and abs(raw - executed) < 1e-6:
+            recovery_frac = float(log.get("reward/mode_stand_recovery_frac", 0.0))
+            static_frac = float(log.get("reward/mode_stand_static_frac", 0.0))
+            if static_frac == 0.0 and recovery_frac > 0.0:
+                _add(
+                    checks,
+                    "PASS",
+                    f"{stage}: recovery dynamic action diagnostics",
+                    f"recovery_frac={recovery_frac:.6f}, raw={raw:.6f}, executed={executed:.6f}",
+                )
+            elif raw > 0.0 and abs(raw - executed) < 1e-6:
                 _add(
                     checks,
                     "PASS",

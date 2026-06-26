@@ -4,6 +4,7 @@ env:
     vel_limit:
       - [-0.3, -0.2, -0.4]
       - [0.8, 0.2, 0.4]
+    resampling_time: 2.0
     rel_standing_envs: 0.3
     rel_transition_envs: 0.2
     transition_vel_limit:
@@ -11,7 +12,7 @@ env:
       - [0.25, 0.05, 0.15]
     small_xy_threshold: 0.0
   reset_base_qvel_limit: 0.5
-  standing_reset_base_qvel_limit: 0.0
+  standing_reset_base_qvel_limit: 0.5
   stand_action_authority: false
   curriculum:
     enabled: true

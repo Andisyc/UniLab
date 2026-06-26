@@ -59,9 +59,29 @@ def _height(env: Any) -> np.ndarray:
     return np.asarray(env._backend.get_base_pos()[:, 2], dtype=np.float32)
 
 
+def _linvel(env: Any) -> np.ndarray:
+    return np.asarray(env._backend.get_sensor_data(env.cfg.sensor.local_linvel), dtype=np.float32)
+
+
 def _tilt_deg(env: Any) -> np.ndarray:
     gravity = np.asarray(env._backend.get_sensor_data(env.cfg.sensor.upvector), dtype=np.float32)
     return np.rad2deg(np.arccos(np.clip(gravity[:, 2], -1.0, 1.0))).astype(np.float32)
+
+
+def _foot_stance(env: Any) -> dict[str, np.ndarray]:
+    left = np.asarray(env._backend.get_sensor_data("left_foot_pos"), dtype=np.float32)
+    right = np.asarray(env._backend.get_sensor_data("right_foot_pos"), dtype=np.float32)
+    delta = left - right
+    return {
+        "sagittal_abs": np.abs(delta[:, 0]),
+        "lateral_abs": np.abs(delta[:, 1]),
+        "height_abs": np.abs(delta[:, 2]),
+    }
+
+
+def _foot_stance_stats(env: Any) -> dict[str, dict[str, float]]:
+    stance = _foot_stance(env)
+    return {name: _stats(values) for name, values in stance.items()}
 
 
 def _create_env(cfg: Any, env_override: dict[str, Any], num_envs: int):
@@ -168,8 +188,60 @@ def _first_step_array(values: np.ndarray, steps: int) -> list[int | None]:
     return [None if int(value) > steps else int(value) for value in values]
 
 
+def _force_policy_command(session: Any, command: np.ndarray) -> None:
+    """Synchronize a forced command into both env info and actor observation."""
+    env = session.env
+    state = env.state
+    if state is None:
+        raise RuntimeError("cannot force command before env state is initialized")
+    commands = np.broadcast_to(command.astype(np.float32), (env.num_envs, 3)).copy()
+    gait_enabled = (np.linalg.norm(commands[:, :2], axis=1) > 1.0e-6) | (
+        np.abs(commands[:, 2]) > 1.0e-6
+    )
+    state.info["commands"] = commands
+    state.info["gait_enabled"] = gait_enabled.astype(np.float32)
+    linvel = _linvel(env)
+    tilt = _tilt_deg(env)
+    reward_cfg = env.cfg.reward_config
+    current_recovery = (
+        (np.linalg.norm(linvel[:, :2], axis=1) > float(reward_cfg.stand_recovery_lin_vel_xy_threshold))
+        | (tilt > float(reward_cfg.stand_recovery_tilt_deg_threshold))
+    ) & (~gait_enabled)
+    recovery = np.asarray(
+        state.info.get("stand_recovery_active", current_recovery.astype(np.float32)),
+        dtype=np.float32,
+    )
+    if recovery.ndim == 2 and recovery.shape[1] == 1:
+        recovery = recovery[:, 0]
+    if recovery.shape != (env.num_envs,):
+        recovery = current_recovery.astype(np.float32)
+    recovery = np.maximum(recovery, current_recovery.astype(np.float32))
+    dynamic_mode = np.maximum(gait_enabled.astype(np.float32), recovery)
+
+    obs_dict = state.obs
+    if "obs" in obs_dict:
+        obs = np.asarray(obs_dict["obs"], dtype=np.float32).copy()
+        obs[:, 93:96] = commands
+        if obs.shape[1] >= 99:
+            obs[:, -1] = dynamic_mode
+        obs_dict["obs"] = obs
+    if getattr(session, "obs", None) is not None:
+        policy_obs = np.asarray(session.obs, dtype=np.float32).copy()
+        policy_obs[:, 93:96] = commands
+        if policy_obs.shape[1] >= 99:
+            policy_obs[:, -1] = dynamic_mode
+        session.obs = policy_obs
+
+
 def run_check(
-    *, num_envs: int, steps: int, seed: int, action_mode: str, device: str
+    *,
+    num_envs: int,
+    steps: int,
+    seed: int,
+    action_mode: str,
+    device: str,
+    walk_vx: float = 0.4,
+    switch_step: int | None = None,
 ) -> tuple[list[str], dict[str, Any]]:
     np.random.seed(seed)
     cfg = _compose_cfg()
@@ -179,7 +251,7 @@ def run_check(
 
     ensure_registries()
     session = None
-    if action_mode == "policy":
+    if action_mode in {"policy", "walk-to-stand"}:
         session_tuple = _create_policy_session(cfg, env_override, num_envs=num_envs, device=device)
         session = session_tuple[0]
         env = session.env
@@ -232,6 +304,7 @@ def run_check(
         details["initial"] = {
             "height": _stats(_height(env)),
             "tilt_deg": _stats(_tilt_deg(env)),
+            "foot_stance": _foot_stance_stats(env),
             "commands_max_abs": float(np.max(np.abs(initial_commands))),
             "mode_signal": _stats(initial_mode),
             "gait_enabled": _stats(initial_gait_enabled),
@@ -250,24 +323,46 @@ def run_check(
         per_env_first_terminated = np.full((num_envs,), steps + 1, dtype=np.int32)
         per_env_first_low_height = np.full((num_envs,), steps + 1, dtype=np.int32)
         per_env_first_large_tilt = np.full((num_envs,), steps + 1, dtype=np.int32)
+        max_foot_stance = {
+            name: float(np.max(values)) for name, values in _foot_stance(env).items()
+        }
         first_terminated_step: int | None = None
         first_low_height_step: int | None = None
         first_large_tilt_step: int | None = None
         reward_base_height_values: list[float] = []
         reward_stand_total_values: list[float] = []
+        walk_to_stand_switch_step = steps // 2 if switch_step is None else int(switch_step)
+        post_switch_xy_speed_values: list[float] = []
+        post_switch_tilt_values: list[float] = []
+        post_switch_height_values: list[float] = []
 
         for step in range(1, steps + 1):
             if session is None:
                 state = env.step(actions)
             else:
+                if action_mode == "walk-to-stand":
+                    command = (
+                        np.array([walk_vx, 0.0, 0.0], dtype=np.float32)
+                        if step <= walk_to_stand_switch_step
+                        else np.array([0.0, 0.0, 0.0], dtype=np.float32)
+                    )
+                    _force_policy_command(session, command)
                 session.step_once()
                 state = env.state
                 if state is None:
                     raise RuntimeError("policy playback step did not leave env.state available")
             heights = _height(env)
             tilts = _tilt_deg(env)
+            foot_stance = _foot_stance(env)
+            linvel = _linvel(env)
+            if action_mode == "walk-to-stand" and step > walk_to_stand_switch_step:
+                post_switch_xy_speed_values.append(float(np.max(np.linalg.norm(linvel[:, :2], axis=1))))
+                post_switch_tilt_values.append(float(np.max(tilts)))
+                post_switch_height_values.append(float(np.min(heights)))
             min_height = min(min_height, float(np.min(heights)))
             max_tilt = max(max_tilt, float(np.max(tilts)))
+            for name, values in foot_stance.items():
+                max_foot_stance[name] = max(max_foot_stance[name], float(np.max(values)))
             per_env_min_height = np.minimum(per_env_min_height, heights)
             per_env_max_tilt = np.maximum(per_env_max_tilt, tilts)
             per_env_cumulative_reward += np.asarray(state.reward, dtype=np.float64)
@@ -310,6 +405,8 @@ def run_check(
             "first_large_tilt_step": first_large_tilt_step,
             "final_height": _stats(_height(env)),
             "final_tilt_deg": _stats(_tilt_deg(env)),
+            "final_foot_stance": _foot_stance_stats(env),
+            "max_foot_stance": max_foot_stance,
             "reward_base_height_min": (
                 float(np.min(reward_base_height_values)) if reward_base_height_values else None
             ),
@@ -317,6 +414,27 @@ def run_check(
                 float(np.min(reward_stand_total_values)) if reward_stand_total_values else None
             ),
         }
+        if action_mode == "walk-to-stand":
+            final_linvel = _linvel(env)
+            details["walk_to_stand"] = {
+                "switch_step": walk_to_stand_switch_step,
+                "walk_command": [float(walk_vx), 0.0, 0.0],
+                "stand_command": [0.0, 0.0, 0.0],
+                "post_switch_max_xy_speed": (
+                    float(np.max(post_switch_xy_speed_values))
+                    if post_switch_xy_speed_values
+                    else None
+                ),
+                "post_switch_final_xy_speed": float(
+                    np.max(np.linalg.norm(final_linvel[:, :2], axis=1))
+                ),
+                "post_switch_max_tilt_deg": (
+                    float(np.max(post_switch_tilt_values)) if post_switch_tilt_values else None
+                ),
+                "post_switch_min_height": (
+                    float(np.min(post_switch_height_values)) if post_switch_height_values else None
+                ),
+            }
 
         if action_mode == "reward-search":
             zero_idx = 0
@@ -401,8 +519,12 @@ def main() -> int:
     parser.add_argument("--num-envs", type=int, default=8)
     parser.add_argument("--steps", type=int, default=200)
     parser.add_argument("--seed", type=int, default=11)
+    parser.add_argument("--walk-vx", type=float, default=0.4)
+    parser.add_argument("--switch-step", type=int, default=None)
     parser.add_argument(
-        "--action-mode", choices=("zero", "policy", "reward-search"), default="zero"
+        "--action-mode",
+        choices=("zero", "policy", "reward-search", "walk-to-stand"),
+        default="zero",
     )
     parser.add_argument("--device", default="cpu")
     args = parser.parse_args()
@@ -413,6 +535,8 @@ def main() -> int:
         seed=args.seed,
         action_mode=args.action_mode,
         device=args.device,
+        walk_vx=args.walk_vx,
+        switch_step=args.switch_step,
     )
     print("G1 standing-mode dynamics check")
     print(json.dumps(details, indent=2, sort_keys=True))

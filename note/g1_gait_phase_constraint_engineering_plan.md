@@ -1545,3 +1545,102 @@ Validation expectation:
   command sample can receive that reward.
 - Existing transition tests must continue to prove transition commands keep
   `gait_enabled=1`.
+
+## 42. 2026-06-26 Standing Must Cover Return-To-Stand Recovery
+
+Observation after restoring WALK-only gait reward:
+
+- Forward walking is now possible.
+- Standing still has a soft-leg feel.
+- The stand-to-walk switch is unstable, and walk-to-stand is more likely to
+  fall than a fresh zero-command standing reset.
+
+Diagnosis:
+
+- This is not primarily a missing Walking gait signal anymore.
+- The active training distribution still under-represents return-to-stand
+  recovery.
+- Before this change, G1 commands were sampled at reset, so one episode mostly
+  stayed in one command mode.
+- Standing reset samples also used `standing_reset_base_qvel_limit=0.0`, so
+  zero-command Standing was trained from a quiet initial state.
+- Interactive playback is different: keyboard commands change inside the same
+  episode, and walk-to-stand inherits residual base velocity, foot placement,
+  and body momentum from Walking.
+
+Design correction:
+
+- Add runtime command resampling to G1 using the same owner distribution as
+  reset sampling:
+  - Standing samples;
+  - Transition samples;
+  - normal Walking samples.
+- Keep this in the G1 env owner, not in scripts.
+- When a runtime resample changes a sample to zero command, immediately refresh
+  `gait_enabled` and set the gait phase to the double-stance stand phase before
+  reward and observation construction.
+- Add a small standing reset velocity range in the active mixed config so
+  Standing learns to absorb residual motion:
+  `standing_reset_base_qvel_limit: 0.2`.
+
+Implemented owner contract:
+
+- Active SAC G1 MuJoCo owner YAML:
+  - `env.commands.resampling_time: 2.0`;
+  - `env.standing_reset_base_qvel_limit: 0.2`.
+- Mixed-mode stage uses the same values.
+- `standing_sanity` and `walking_sanity` keep their mode fractions and remain
+  diagnostic stages.
+
+Validation expectation:
+
+- Config tests must prove runtime resampling and standing recovery qvel reach
+  the env override.
+- Env lifecycle tests must prove runtime resampling can switch an env from
+  WALK to STAND and refresh `gait_enabled` plus double-stance phase.
+- Live-path sentinel must still prove the observation contract and mode reward
+  logs survive in standing, walking, and mixed stages.
+
+## 43. 2026-06-26 Standing Should Share The Walking Posture Prior
+
+Clarified observation:
+
+- Standing is not merely unstable during mode transition.
+- The standing posture itself is wrong.
+- The policy keeps making balance corrections, the legs look soft, and the feet
+  gradually become staggered front-to-back instead of staying aligned.
+
+Diagnosis:
+
+- The Standing objective already contains balance, height, velocity damping, and
+  action regularization.
+- The active Walking objective already has a posture prior through the shared
+  `pose` term in `balance_common_terms`.
+- Therefore the clean solution is not to add a separate STAND-only foot geometry
+  reward. A separate Standing geometry can create a new discontinuity at the
+  stand/walk boundary.
+- The correct invariant is: Standing and Walking should share the same nominal
+  body posture prior; Walking adds velocity tracking and gait reward on top.
+
+Design correction:
+
+- Keep `pose` in `reward.mode.balance_common_terms`, so both STAND and WALK use
+  the same posture reward.
+- Strengthen the shared `pose` scale instead of adding another STAND-only
+  geometry term.
+- Keep WALK-only terms limited to command tracking and gait-style rewards.
+- Keep STAND-only terms limited to zero-command damping and drift suppression.
+
+Implemented owner contract:
+
+- Active SAC G1 MuJoCo owner YAML:
+  - `pose: -0.3`;
+  - `pose` remains in `balance_common_terms`;
+  - no separate `stand_feet_sagittal_l2` live term.
+
+Validation expectation:
+
+- Config tests must prove `pose` is a shared common term and that no STAND-only
+  foot geometry term is active.
+- Existing reward-dispatch tests must continue to prove common terms apply to
+  both STAND and WALK while walking tracking/gait terms remain WALK-only.
