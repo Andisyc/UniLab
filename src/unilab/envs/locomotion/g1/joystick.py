@@ -17,6 +17,7 @@ from unilab.base.curriculum import EpisodeLengthTracker, PenaltyCurriculum
 from unilab.base.np_env import NpEnvState
 from unilab.base.scene import SceneCfg
 from unilab.dtype_config import get_global_dtype
+from unilab.envs.common.rotation import np_quat_conjugate, np_quat_mul
 from unilab.envs.locomotion.common import rewards
 from unilab.envs.locomotion.common.commands import (
     Commands,
@@ -264,6 +265,8 @@ class G1RewardConfig:
     stand_recovery_lin_vel_xy_threshold: float = 0.2
     stand_recovery_tilt_deg_threshold: float = 8.0
     close_feet_threshold: float = 0.15
+    stand_feet_x_target: float = 0.0
+    stand_feet_y_width_target: float = 0.21
     gait_constraint: GaitConstraintConfig | dict[str, Any] = field(
         default_factory=GaitConstraintConfig
     )
@@ -515,6 +518,9 @@ class G1WalkEnv(G1BaseEnv):
             "stand_dof_vel_l2": self._reward_stand_dof_vel_l2,
             "stand_lin_vel_xy_l2": self._reward_stand_lin_vel_xy_l2,
             "stand_yaw_vel_l2": self._reward_stand_yaw_vel_l2,
+            "stand_feet_x_l2": self._reward_stand_feet_x_l2,
+            "stand_feet_y_width_l2": self._reward_stand_feet_y_width_l2,
+            "stand_feet_yaw_l2": self._reward_stand_feet_yaw_l2,
             "feet_phase": self._reward_feet_phase,
             "feet_phase_contrast": self._reward_feet_phase_contrast,
             "feet_phase_contact": self._reward_feet_phase_contact,
@@ -1176,6 +1182,32 @@ class G1WalkEnv(G1BaseEnv):
         return np.asarray(
             np.square(ctx.gyro[:, 2]) * self._stand_mode_mask(ctx),
             dtype=get_global_dtype(),
+        )
+
+    def _reward_stand_feet_x_l2(self, ctx: RewardContext):
+        left_foot = self._backend.get_sensor_data("left_foot_pos")
+        right_foot = self._backend.get_sensor_data("right_foot_pos")
+        x_delta = left_foot[:, 0] - right_foot[:, 0]
+        target = float(self._reward_cfg.stand_feet_x_target)
+        return np.asarray(
+            np.square(x_delta - target) * self._stand_mode_mask(ctx), dtype=get_global_dtype()
+        )
+
+    def _reward_stand_feet_y_width_l2(self, ctx: RewardContext):
+        left_foot = self._backend.get_sensor_data("left_foot_pos")
+        right_foot = self._backend.get_sensor_data("right_foot_pos")
+        width = np.abs(left_foot[:, 1] - right_foot[:, 1])
+        target = float(self._reward_cfg.stand_feet_y_width_target)
+        return np.asarray(
+            np.square(width - target) * self._stand_mode_mask(ctx), dtype=get_global_dtype()
+        )
+
+    def _reward_stand_feet_yaw_l2(self, ctx: RewardContext):
+        left_foot_quat = self._backend.get_sensor_data("left_foot_quat")
+        right_foot_quat = self._backend.get_sensor_data("right_foot_quat")
+        relative = np_quat_mul(left_foot_quat, np_quat_conjugate(right_foot_quat))
+        return np.asarray(
+            np.square(relative[:, 3]) * self._stand_mode_mask(ctx), dtype=get_global_dtype()
         )
 
     def _reward_upper_body_pose(self, ctx: RewardContext):

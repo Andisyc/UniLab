@@ -2928,6 +2928,49 @@ def test_play_interactive_replays_checkpoint_env_contract_for_sac_g1(
     assert merged["reward_config"]["mode"]["enabled"] is True
 
 
+def test_play_interactive_treats_missing_g1_mode_observation_as_legacy_false(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    mod = _play_interactive()
+    checkpoint = tmp_path / "model_10.pt"
+    checkpoint.write_bytes(b"checkpoint")
+    (tmp_path / "run_config.json").write_text(
+        json.dumps(
+            {
+                "config": {
+                    "env": {
+                        "commands": {"rel_standing_envs": 0.0},
+                    },
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        mod,
+        "resolve_task_checkpoint_path",
+        lambda *args, **kwargs: (checkpoint, tmp_path),
+    )
+    args = types.SimpleNamespace(
+        task="G1WalkFlat",
+        load_run="run",
+        checkpoint=None,
+        algo_log_name="fast_sac",
+        log_root=None,
+    )
+
+    merged = mod._apply_checkpoint_env_contract(
+        {
+            "mode_observation": True,
+            "commands": {"rel_standing_envs": 1.0},
+        },
+        args,
+    )
+
+    assert merged["mode_observation"] is False
+    assert merged["commands"]["rel_standing_envs"] == 0.0
+
+
 def test_play_interactive_warns_about_hard_gated_standing_checkpoint() -> None:
     mod = _play_interactive()
 

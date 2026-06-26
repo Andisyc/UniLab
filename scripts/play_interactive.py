@@ -279,6 +279,12 @@ def _apply_checkpoint_env_contract(
     run_env = run_cfg.get("env")
     if isinstance(run_env, Mapping):
         merged.update(dict(run_env))
+        if (
+            args.task in {"g1_walk_flat", "G1WalkFlat"}
+            and "mode_observation" not in run_env
+            and "mode_observation" in merged
+        ):
+            merged["mode_observation"] = False
     run_reward = run_cfg.get("reward")
     if isinstance(run_reward, Mapping):
         merged["reward_config"] = dict(run_reward)

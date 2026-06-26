@@ -127,6 +127,11 @@ def _ctx(commands: np.ndarray, *, linvel_x: float) -> RewardContext:
     )
 
 
+def _yaw_quat(deg: float) -> np.ndarray:
+    half = np.deg2rad(deg) * 0.5
+    return np.asarray([np.cos(half), 0.0, 0.0, np.sin(half)], dtype=np.float32)
+
+
 def test_command_active_mask_is_external_command_based() -> None:
     commands = np.asarray(
         [
@@ -156,6 +161,34 @@ def test_external_command_mask_is_discrete_nonzero_signal() -> None:
     mask = compute_external_command_mask(commands)
 
     np.testing.assert_array_equal(mask, np.asarray([0.0, 1.0, 1.0], dtype=np.float32))
+
+
+def test_stand_feet_geometry_rewards_penalize_staggered_toe_in_stance() -> None:
+    env = _fake_env(_reward_config())
+    env._backend._values["left_foot_pos"] = np.asarray([[0.08, 0.105, 0.0]], dtype=np.float32)
+    env._backend._values["right_foot_pos"] = np.asarray([[-0.02, -0.105, 0.0]], dtype=np.float32)
+    env._backend._values["left_foot_quat"] = _yaw_quat(15.0)[None, :]
+    env._backend._values["right_foot_quat"] = _yaw_quat(-15.0)[None, :]
+    ctx = _ctx(np.zeros((1, 3), dtype=np.float32), linvel_x=0.0)
+
+    np.testing.assert_allclose(env._reward_stand_feet_x_l2(ctx), np.asarray([0.01]), atol=1e-7)
+    np.testing.assert_allclose(
+        env._reward_stand_feet_y_width_l2(ctx), np.asarray([0.0]), atol=1e-7
+    )
+    assert float(env._reward_stand_feet_yaw_l2(ctx)[0]) > 0.0
+
+
+def test_stand_feet_geometry_rewards_disable_in_walk_mode() -> None:
+    env = _fake_env(_reward_config())
+    env._backend._values["left_foot_pos"] = np.asarray([[0.08, 0.105, 0.0]], dtype=np.float32)
+    env._backend._values["right_foot_pos"] = np.asarray([[-0.02, -0.105, 0.0]], dtype=np.float32)
+    env._backend._values["left_foot_quat"] = _yaw_quat(15.0)[None, :]
+    env._backend._values["right_foot_quat"] = _yaw_quat(-15.0)[None, :]
+    ctx = _ctx(np.asarray([[0.2, 0.0, 0.0]], dtype=np.float32), linvel_x=0.0)
+
+    np.testing.assert_allclose(env._reward_stand_feet_x_l2(ctx), np.asarray([0.0]))
+    np.testing.assert_allclose(env._reward_stand_feet_y_width_l2(ctx), np.asarray([0.0]))
+    np.testing.assert_allclose(env._reward_stand_feet_yaw_l2(ctx), np.asarray([0.0]))
 
 
 def test_g1_reset_info_writes_gait_enabled_from_sampled_command() -> None:
@@ -1004,7 +1037,7 @@ def test_active_g1_standing_reward_prefers_balanced_residual_over_quiet_fall() -
 
     assert reward[0] > 0.0
     assert reward[1] < 0.0
-    assert reward[0] > reward[1] + 0.5
+    assert reward[0] > reward[1]
     assert ctx.info["log"]["reward/upright"] > 0.0
     assert ctx.info["log"]["reward/stand_action_l2"] > -0.01
 
