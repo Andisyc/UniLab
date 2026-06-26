@@ -13,9 +13,9 @@ def test_reward_config_loading_g1():
         cfg = compose(config_name="config", overrides=["task=sac/g1_walk_flat/mujoco"])
         assert hasattr(cfg, "reward")
         assert cfg.reward.scales.tracking_lin_vel == 2.0
-        assert cfg.reward.scales.feet_phase == 0.0
-        assert cfg.reward.scales.feet_phase_contrast == 0.0
-        assert cfg.reward.scales.feet_phase_contact == 0.0
+        assert cfg.reward.scales.feet_phase == 1.0
+        assert cfg.reward.scales.feet_phase_contrast == 0.8
+        assert cfg.reward.scales.feet_phase_contact == 0.5
         assert cfg.reward.scales.alive == 2.0
         assert cfg.reward.scales.upright == 4.0
         assert cfg.reward.scales.stand_still == -0.2
@@ -64,8 +64,14 @@ def test_reward_config_loading_g1():
         assert "tracking_lin_vel" not in cfg.reward.mode.balance_common_terms
         assert "stand_lin_vel_xy_l2" in cfg.reward.mode.stand_terms
         assert "base_height" not in cfg.reward.mode.stand_terms
+        assert "feet_phase" not in cfg.reward.mode.stand_terms
+        assert "feet_phase_contrast" not in cfg.reward.mode.stand_terms
+        assert "feet_phase_contact" not in cfg.reward.mode.stand_terms
         assert "stand_lin_vel_xy_l2" not in cfg.reward.mode.walk_terms
         assert "tracking_lin_vel" in cfg.reward.mode.walk_terms
+        assert "feet_phase" in cfg.reward.mode.walk_terms
+        assert "feet_phase_contrast" in cfg.reward.mode.walk_terms
+        assert "feet_phase_contact" in cfg.reward.mode.walk_terms
         assert "stand_action_l2" not in cfg.reward.mode.walk_terms
         assert cfg.reward.pose_weights[2] == 0.05
         assert cfg.reward.pose_weights[8] == 0.05

@@ -1492,3 +1492,56 @@ Validation expectation:
   `gait_enabled=1`.
 - Existing reward-mode tests must continue to prove `base_height` is common and
   command tracking remains WALK-only.
+
+## 41. 2026-06-26 Walking Needs Positive Step Credit After The Transition Bridge
+
+Observation after retraining with transition samples:
+
+- The robot no longer behaves like it lacks a walking command.
+- It visibly wants to move forward, but cannot commit to a real step.
+- The observed behavior is a slow shuffle: small contact-preserving motions
+  inch the body forward instead of producing clear alternating swing/stance.
+
+Diagnosis:
+
+- Section 40 fixed the distribution boundary between Standing and Walking.
+- It did not provide a positive learning signal for how Walking should realize
+  forward motion.
+- The active WALK terms only contained velocity tracking and under-speed
+  pressure. That can say "move forward", but it does not say "lift and exchange
+  feet while moving forward".
+- The gait constraint bridge is a negative pressure. It can punish bad phase
+  structure, but by itself it is too weak and too indirect to create a first
+  stepping behavior from a conservative balance solution.
+
+Design correction:
+
+- Keep Standing and Walking height unified through `balance_common_terms` and a
+  single `base_height_target`.
+- Keep transition samples as WALK samples, not a third reward mode.
+- Re-enable the existing positive gait-style terms only in WALK routing:
+  - `feet_phase`;
+  - `feet_phase_contrast`;
+  - `feet_phase_contact`.
+- Do not add these terms to `balance_common_terms` or `stand_terms`. Zero-command
+  Standing must not receive a foot-swing reward.
+
+Implemented owner contract:
+
+- Active SAC G1 MuJoCo owner YAML sets:
+  - `feet_phase: 1.0`;
+  - `feet_phase_contrast: 0.8`;
+  - `feet_phase_contact: 0.5`.
+- These terms are listed only under `reward.mode.walk_terms`.
+- `reward.mode.stand_terms` remains limited to zero-command behavior, and
+  `reward.mode.balance_common_terms` remains the shared balance/height owner.
+
+Validation expectation:
+
+- Config tests must prove gait-style terms have nonzero scales and are present
+  only in WALK terms.
+- Reward dispatch tests must prove a zero-command sample receives no gait-style
+  positive reward even if its feet match the phase target, while a nonzero
+  command sample can receive that reward.
+- Existing transition tests must continue to prove transition commands keep
+  `gait_enabled=1`.

@@ -560,6 +560,56 @@ def test_reward_mode_dispatch_separates_stand_and_walk_terms() -> None:
     )
 
 
+def test_gait_style_rewards_are_walk_only_terms() -> None:
+    reward_cfg = G1WalkRewardConfig(
+        scales={"feet_phase": 1.0},
+        tracking_sigma=0.12,
+        gait_frequency=1.5,
+        feet_phase_swing_height=0.09,
+        feet_phase_tracking_sigma=0.04,
+        base_height_target=0.754,
+        min_base_height=0.3,
+        max_tilt_deg=65.0,
+        gait_constraint=GaitConstraintConfig(enabled=False),
+        mode=RewardModeConfig(
+            enabled=True,
+            stand_terms=[],
+            walk_terms=["feet_phase"],
+        ),
+        pose_weights=[0.01] * 29,
+    )
+    env = _fake_env(reward_cfg, num_envs=2)
+    env._enable_reward_log = True
+    env._backend._values["left_foot_pos"][:, 2] = np.asarray([0.0, 0.09], dtype=np.float32)
+    env._backend._values["right_foot_pos"][:, 2] = np.asarray([0.0, 0.0], dtype=np.float32)
+    ctx = RewardContext(
+        info={
+            "commands": np.asarray([[0.0, 0.0, 0.0], [0.12, 0.0, 0.0]], dtype=np.float32),
+            "gait_phase": np.asarray([[np.pi, np.pi], [0.0, np.pi]], dtype=np.float32),
+            "steps": np.zeros((2,), dtype=np.uint32),
+        },
+        linvel=np.asarray([[0.2, 0.0, 0.0], [0.2, 0.0, 0.0]], dtype=np.float32),
+        gyro=np.zeros((2, 3), dtype=np.float32),
+        dof_pos=np.zeros((2, 29), dtype=np.float32),
+        dof_vel=np.zeros((2, 29), dtype=np.float32),
+        num_envs=2,
+        default_angles=np.zeros((29,), dtype=np.float32),
+        tracking_sigma=reward_cfg.tracking_sigma,
+        base_height_target=reward_cfg.base_height_target,
+        base_height=np.full((2,), reward_cfg.base_height_target, dtype=np.float32),
+        gravity=np.asarray([[0.0, 0.0, 1.0], [0.0, 0.0, 1.0]], dtype=np.float32),
+        pose_weights=np.ones((29,), dtype=np.float32),
+    )
+
+    reward = env._compute_mode_reward(ctx, reward_cfg)
+
+    np.testing.assert_array_equal(ctx.info["gait_enabled"], np.asarray([0.0, 1.0], dtype=np.float32))
+    np.testing.assert_allclose(reward, np.asarray([0.0, env._cfg.ctrl_dt], dtype=np.float32))
+    np.testing.assert_allclose(ctx.info["log"]["reward/feet_phase"], 0.5, rtol=1.0e-6)
+    assert ctx.info["log"]["reward/stand_total"] == 0.0
+    assert ctx.info["log"]["reward/walk_total"] > 0.0
+
+
 def test_walking_reward_is_hard_gated_out_of_standing_samples() -> None:
     reward_cfg = G1WalkRewardConfig(
         scales={"tracking_lin_vel": 2.0},
