@@ -17,7 +17,7 @@ from unilab.base.curriculum import EpisodeLengthTracker, PenaltyCurriculum
 from unilab.base.np_env import NpEnvState
 from unilab.base.scene import SceneCfg
 from unilab.dtype_config import get_global_dtype
-from unilab.envs.common.rotation import np_quat_conjugate, np_quat_mul
+from unilab.envs.common.rotation import np_wrap_to_pi, np_yaw_from_quat
 from unilab.envs.locomotion.common import rewards
 from unilab.envs.locomotion.common.commands import (
     Commands,
@@ -1078,8 +1078,11 @@ class G1WalkEnv(G1BaseEnv):
         )
         swing_height = self._reward_cfg.feet_phase_swing_height
         left_target, right_target = compute_feet_phase_height_targets(gait_phase, swing_height)
-        left_error = np.square(left_foot[:, 2] - left_target)
-        right_error = np.square(right_foot[:, 2] - right_target)
+        stance_z = np.minimum(left_foot[:, 2], right_foot[:, 2])
+        left_height = left_foot[:, 2] - stance_z
+        right_height = right_foot[:, 2] - stance_z
+        left_error = np.square(left_height - left_target)
+        right_error = np.square(right_height - right_target)
         reward = np.exp(-(left_error + right_error) / self._reward_cfg.feet_phase_tracking_sigma)
         return np.asarray(reward * self._gait_reward_gate(ctx.linvel), dtype=get_global_dtype())
 
@@ -1095,7 +1098,8 @@ class G1WalkEnv(G1BaseEnv):
         )
         swing_height = self._reward_cfg.feet_phase_swing_height
         left_target, right_target = compute_feet_phase_height_targets(gait_phase, swing_height)
-        actual_delta = left_foot[:, 2] - right_foot[:, 2]
+        stance_z = np.minimum(left_foot[:, 2], right_foot[:, 2])
+        actual_delta = (left_foot[:, 2] - stance_z) - (right_foot[:, 2] - stance_z)
         target_delta = left_target - right_target
         error = np.square(actual_delta - target_delta)
         reward = np.exp(-error / self._reward_cfg.feet_phase_tracking_sigma)
@@ -1187,7 +1191,8 @@ class G1WalkEnv(G1BaseEnv):
     def _reward_stand_feet_x_l2(self, ctx: RewardContext):
         left_foot = self._backend.get_sensor_data("left_foot_pos")
         right_foot = self._backend.get_sensor_data("right_foot_pos")
-        x_delta = left_foot[:, 0] - right_foot[:, 0]
+        delta = self._feet_delta_in_base_yaw_frame(left_foot, right_foot)
+        x_delta = delta[:, 0]
         target = float(self._reward_cfg.stand_feet_x_target)
         return np.asarray(
             np.square(x_delta - target) * self._stand_mode_mask(ctx), dtype=get_global_dtype()
@@ -1196,7 +1201,8 @@ class G1WalkEnv(G1BaseEnv):
     def _reward_stand_feet_y_width_l2(self, ctx: RewardContext):
         left_foot = self._backend.get_sensor_data("left_foot_pos")
         right_foot = self._backend.get_sensor_data("right_foot_pos")
-        width = np.abs(left_foot[:, 1] - right_foot[:, 1])
+        delta = self._feet_delta_in_base_yaw_frame(left_foot, right_foot)
+        width = np.abs(delta[:, 1])
         target = float(self._reward_cfg.stand_feet_y_width_target)
         return np.asarray(
             np.square(width - target) * self._stand_mode_mask(ctx), dtype=get_global_dtype()
@@ -1205,9 +1211,27 @@ class G1WalkEnv(G1BaseEnv):
     def _reward_stand_feet_yaw_l2(self, ctx: RewardContext):
         left_foot_quat = self._backend.get_sensor_data("left_foot_quat")
         right_foot_quat = self._backend.get_sensor_data("right_foot_quat")
-        relative = np_quat_mul(left_foot_quat, np_quat_conjugate(right_foot_quat))
+        base_yaw = np_yaw_from_quat(self._backend.get_base_quat())
+        left_yaw = np_wrap_to_pi(np_yaw_from_quat(left_foot_quat) - base_yaw)
+        right_yaw = np_wrap_to_pi(np_yaw_from_quat(right_foot_quat) - base_yaw)
+        relative_yaw = np_wrap_to_pi(left_yaw - right_yaw)
         return np.asarray(
-            np.square(relative[:, 3]) * self._stand_mode_mask(ctx), dtype=get_global_dtype()
+            np.square(relative_yaw) * self._stand_mode_mask(ctx), dtype=get_global_dtype()
+        )
+
+    def _feet_delta_in_base_yaw_frame(
+        self, left_foot: np.ndarray, right_foot: np.ndarray
+    ) -> np.ndarray:
+        delta = np.asarray(left_foot[:, :2] - right_foot[:, :2], dtype=get_global_dtype())
+        base_yaw = np_yaw_from_quat(self._backend.get_base_quat())
+        cos_yaw = np.cos(base_yaw)
+        sin_yaw = np.sin(base_yaw)
+        return np.stack(
+            [
+                cos_yaw * delta[:, 0] + sin_yaw * delta[:, 1],
+                -sin_yaw * delta[:, 0] + cos_yaw * delta[:, 1],
+            ],
+            axis=1,
         )
 
     def _reward_upper_body_pose(self, ctx: RewardContext):

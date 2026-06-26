@@ -178,6 +178,27 @@ def test_stand_feet_geometry_rewards_penalize_staggered_toe_in_stance() -> None:
     assert float(env._reward_stand_feet_yaw_l2(ctx)[0]) > 0.0
 
 
+def test_stand_feet_geometry_uses_base_yaw_frame() -> None:
+    env = _fake_env(_reward_config())
+    yaw = np.deg2rad(90.0)
+    rot = np.asarray([[np.cos(yaw), -np.sin(yaw)], [np.sin(yaw), np.cos(yaw)]])
+    left_local = np.asarray([0.05, 0.105])
+    right_local = np.asarray([-0.05, -0.105])
+    env._backend._values["left_foot_pos"] = np.asarray(
+        [[*(rot @ left_local), 0.0]], dtype=np.float32
+    )
+    env._backend._values["right_foot_pos"] = np.asarray(
+        [[*(rot @ right_local), 0.0]], dtype=np.float32
+    )
+    env._backend._values["base_quat"] = _yaw_quat(90.0)[None, :]
+    ctx = _ctx(np.zeros((1, 3), dtype=np.float32), linvel_x=0.0)
+
+    np.testing.assert_allclose(env._reward_stand_feet_x_l2(ctx), np.asarray([0.01]), atol=1e-7)
+    np.testing.assert_allclose(
+        env._reward_stand_feet_y_width_l2(ctx), np.asarray([0.0]), atol=1e-7
+    )
+
+
 def test_stand_feet_geometry_rewards_disable_in_walk_mode() -> None:
     env = _fake_env(_reward_config())
     env._backend._values["left_foot_pos"] = np.asarray([[0.08, 0.105, 0.0]], dtype=np.float32)
@@ -189,6 +210,18 @@ def test_stand_feet_geometry_rewards_disable_in_walk_mode() -> None:
     np.testing.assert_allclose(env._reward_stand_feet_x_l2(ctx), np.asarray([0.0]))
     np.testing.assert_allclose(env._reward_stand_feet_y_width_l2(ctx), np.asarray([0.0]))
     np.testing.assert_allclose(env._reward_stand_feet_yaw_l2(ctx), np.asarray([0.0]))
+
+
+def test_feet_phase_reward_rejects_flat_swing_foot_with_sharp_sigma() -> None:
+    reward_cfg = _reward_config()
+    reward_cfg.feet_phase_tracking_sigma = 0.004
+    env = _fake_env(reward_cfg)
+    env._backend._values["left_foot_pos"] = np.asarray([[0.0, 0.105, 0.0]], dtype=np.float32)
+    env._backend._values["right_foot_pos"] = np.asarray([[0.0, -0.105, 0.0]], dtype=np.float32)
+    ctx = _ctx(np.asarray([[0.2, 0.0, 0.0]], dtype=np.float32), linvel_x=0.2)
+    ctx.info["gait_phase"] = np.asarray([[0.0, np.pi]], dtype=np.float32)
+
+    assert float(env._reward_feet_phase(ctx)[0]) < 0.2
 
 
 def test_g1_reset_info_writes_gait_enabled_from_sampled_command() -> None:
