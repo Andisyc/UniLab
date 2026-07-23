@@ -12,7 +12,11 @@ from unilab.algos.torch.amp.spec import (
     build_amp_observation_from_selected,
 )
 from unilab.algos.torch.amp.transition import resolve_amp_transition_next
-from unilab.envs.locomotion.g1.amp_walk import G1AMPWalkCfg, G1AMPWalkEnv
+from unilab.envs.locomotion.g1.amp_walk import (
+    G1AMPWalkCfg,
+    G1AMPWalkEnv,
+    compute_self_collision_cost,
+)
 from unilab.envs.locomotion.g1.joystick import GaitConstraintConfig
 
 
@@ -33,10 +37,15 @@ class _BodyStateBackend:
         self.lin = rng.normal(size=(2, 14, 3)).astype(np.float32)
         self.ang = rng.normal(size=(2, 14, 3)).astype(np.float32)
         self.requested_ids: np.ndarray | None = None
+        self.sensor_history = np.zeros((2, 4, 3), dtype=np.float32)
 
     def get_body_state_w(self, body_ids: np.ndarray):
         self.requested_ids = body_ids.copy()
         return self.pos, self.quat, self.lin, self.ang
+
+    def get_sensor_history(self, name: str) -> np.ndarray:
+        assert name == "self_collision"
+        return self.sensor_history
 
 
 def _unit_env() -> G1AMPWalkEnv:
@@ -49,6 +58,9 @@ def _unit_env() -> G1AMPWalkEnv:
         curriculum=SimpleNamespace(enabled=False),
         mode_observation=False,
         commands=SimpleNamespace(observe_height_command=False),
+        self_collision_sensor_name="self_collision",
+        self_collision_history_length=4,
+        self_collision_force_threshold=10.0,
     )
     env._reward_cfg = SimpleNamespace(scales={}, gait_constraint=GaitConstraintConfig())
     env._obs_noise = lambda data, scale: data
@@ -67,6 +79,45 @@ def test_amp_walk_cfg_is_fixed_nonzero_forward_without_standing() -> None:
     assert cfg.mode_observation is False
     assert cfg.commands.observe_height_command is False
     assert cfg.add_body_sensors is True
+    assert cfg.self_collision_sensor_name == "self_collision"
+    assert cfg.self_collision_history_length == 4
+    assert cfg.self_collision_force_threshold == 10.0
+    assert cfg.scene.fragment_files[-1].endswith("g1/amp_walk_task.xml")
+
+
+def test_self_collision_cost_matches_source_strict_threshold_and_slot_reduction() -> None:
+    history = np.array(
+        [
+            [[0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+             [6.0, 8.0, 0.0, 0.0, 0.0, 0.0],
+             [0.0, 0.0, 10.1, 0.0, 0.0, 0.0],
+             [0.0, 0.0, 0.0, 12.0, 0.0, 0.0]],
+            [[11.0, 0.0, 0.0, 12.0, 0.0, 0.0],
+             [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+             [0.0, 10.0, 0.0, 0.0, 0.0, 0.0],
+             [0.0, 0.0, 0.0, 0.0, 0.0, 10.01]],
+        ],
+        dtype=np.float32,
+    )
+
+    actual = compute_self_collision_cost(history, force_threshold=10.0)
+
+    np.testing.assert_array_equal(actual, [2.0, 2.0])
+
+
+def test_amp_walk_reward_reads_public_history_and_reports_raw_diagnostics() -> None:
+    env = _unit_env()
+    backend = cast(_BodyStateBackend, env._backend)
+    backend.sensor_history[0, 1, 0] = 11.0
+    backend.sensor_history[0, 3, 1] = 12.0
+    backend.sensor_history[1, 2, 2] = 10.0
+    ctx = SimpleNamespace(info={})
+
+    actual = env._reward_self_collisions(ctx)
+
+    np.testing.assert_array_equal(actual, [2.0, 0.0])
+    np.testing.assert_array_equal(ctx.info["self_collision_hit_count"], actual)
+    np.testing.assert_allclose(ctx.info["self_collision_hit_rate"], [0.5, 0.0])
 
 
 def test_amp_walk_rejects_default_pose_reward_authority() -> None:
@@ -176,7 +227,7 @@ def test_g1_amp_walk_live_reset_and_timeout_final_observation() -> None:
 
     ensure_registries()
     reward = G1WalkRewardConfig(
-        scales={"tracking_lin_vel": 2.0, "alive": 1.0},
+        scales={"tracking_lin_vel": 2.0, "alive": 1.0, "self_collisions": -0.1},
         tracking_sigma=0.25,
         base_height_target=0.754,
         min_base_height=0.3,
@@ -210,5 +261,12 @@ def test_g1_amp_walk_live_reset_and_timeout_final_observation() -> None:
         assert state.final_observation["amp"].shape == (2, 195)
         assert np.isfinite(state.final_observation["amp"]).all()
         np.testing.assert_array_equal(state.info["_final_observation"], [True, True])
+        assert state.info["self_collision_hit_count"].shape == (2,)
+        assert state.info["self_collision_hit_rate"].shape == (2,)
+        assert np.isfinite(state.info["self_collision_hit_count"]).all()
+        assert np.isfinite(state.info["self_collision_hit_rate"]).all()
+        assert np.isfinite(state.info["log"]["reward/self_collisions"])
+        assert np.isfinite(state.info["log"]["reward/self_collision_hit_count_mean"])
+        assert np.isfinite(state.info["log"]["reward/self_collision_hit_rate_mean"])
     finally:
         env.close()

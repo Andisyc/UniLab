@@ -1,7 +1,8 @@
 # AMP-Only Async Walking Control Room
 
-Status: `Recovery Step 2 / 3 passed`; style-authority repair and short-sentinel
-evidence are complete. Step 3 waits for separate human authorization.
+Status: symmetric self-collision Engineering Steps 1-2 are
+`runtime-pass / style-health-pass / collision-connectivity-pass`; work is
+paused before the separately authorized material Step 3 / 3.
 
 This directory governs the proposed migration of walk-only AMP training from
 `/Users/chengyuxuan/ArtiIntComVis/AMP_mjlab` into UniLab's asynchronous APPO
@@ -20,6 +21,8 @@ role or a hidden extension of the active multi-teacher method.
   and other gait-controller ownership;
 - retain only the minimum task reward needed to specify commanded locomotion and
   physical viability;
+- include AMP_mjlab's full-body symmetric self-collision viability signal with
+  source parameters, without any right-hand-specific pose or distance term;
 - train a deployable actor; the discriminator remains training-only.
 - defer AMP plus the current multi-teacher distillation workflow to Phase 2;
   that integration requires a separate design/contract pass and must not enter
@@ -36,7 +39,9 @@ role or a hidden extension of the active multi-teacher method.
 7. [Current task canvas](task_canvas.md)
 8. [Step 8 quality-failure evidence](evidence/2026-07-23-step8-runtime-pass-quality-fail.md)
 9. [Recovery Step 2 evidence](evidence/2026-07-23-recovery-step2-style-authority.md)
-10. [Current recovery engineering plan](plans/current_engineering_plan.md)
+10. [Fresh baseline and self-collision gap evidence](evidence/2026-07-23-step3-baseline-self-collision-gap.md)
+11. [Self-collision Steps 1-2 evidence](evidence/2026-07-23-self-collision-steps1-2.md)
+12. [Current repair engineering plan](plans/current_engineering_plan.md)
 
 ## Governance State
 
@@ -50,9 +55,18 @@ The original eight-step migration plan reached Step 8 and closed as
 fixed-forward locomotion routes passed; human-like AMP style did not. Recovery
 Step 1 activated `AMP-WALK-METHOD-v002` and `AMP-WALK-TRAIN-v003`. Recovery
 Step 2 removed default-pose authority, added support/style diagnostics, and
-passed a fresh 20-iteration official async sentinel with a clean lifecycle. The
-frozen tail-five logit threshold passed by only about 0.00027, so this is not a
-policy-quality claim. Step 3 material GPU training is not authorized.
+passed a fresh 20-iteration official async sentinel. The subsequently
+authorized 2000-iteration run completed with a clean lifecycle and healthy AMP
+tail metrics. Playback reached the source author's approximate style ceiling
+but exposed persistent hand-leg contact.
 
-No policy-quality claim is active. `model_1850.pt` is retained as failed-run
-evidence/playback identity and must not seed the proposed recovery run.
+The human owner confirmed the AMP_mjlab whole-body symmetric self-collision
+term as a missing minimum-viability signal. This activated
+`AMP-WALK-METHOD-v003` and `AMP-WALK-TRAIN-v004` without adding a Concept Figure
+block or reopening gait/style authority. Engineering Steps 1-2 now pass their
+backend, isolation, connectivity, AMP-health, and lifecycle gates. Material
+Step 3 remains unauthorized.
+
+No repaired-policy quality claim is active. `model_1850.pt` and `model_2000.pt`
+are retained as evidence/playback identities and must not seed the proposed
+repair run.

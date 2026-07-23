@@ -1,172 +1,218 @@
-# AMP-WALK Phase 1 Style-Authority Recovery Plan
+# AMP-WALK Phase 1 Symmetric Self-Collision Repair Plan
 
-Status: `paused before Step 3`
+Status: `Engineering Steps 1-2 complete; paused before Step 3`
 
 Date: 2026-07-23
 
 Contracts:
 
-- `AMP-WALK-METHOD-v002`
-- `AMP-WALK-TRAIN-v003`
+- `AMP-WALK-METHOD-v003`
+- `AMP-WALK-TRAIN-v004`
 
 Concept Figure:
 
 - `note/architecture/concept/04_amp_walk_async_method.data.json`
 
-Plan cursor: Recovery Step 2 / 3 passed with minimal logit margin. Stop before
-Step 3 material GPU training; Step 3 requires separate human authorization.
+Plan cursor: Engineering Steps 1-2 implemented the source-parity signal and
+passed the frozen 20-iteration async sentinel. Step 3 material GPU training and
+matched playback evaluation remain a separate human authorization boundary.
 
 ## Terminal Outcome
 
-Produce a fresh-training-ready Phase 1 AMP route in which task reward owns only
-fixed-forward motion and minimum physical viability, AMP exclusively owns
-human-like posture/style, and one 20-iteration official async sentinel proves
-that the style signal is not already collapsed. This plan does not execute the
-material Step 3 GPU quality run.
+Run one fresh fixed-forward AMP experiment through UniLab's official async APPO
+route with the AMP_mjlab full-body symmetric self-collision cost. Preserve AMP
+as the sole human-style owner, preserve the existing lifecycle repair, and
+determine whether the missing physical-viability signal removes persistent
+hand-leg contact without sacrificing forward locomotion or AMP health.
 
-## Human Method Map
+## Confirmed Semantic Boundary
 
-| design ID | canonical human name | active contract + section | Concept Figure block ID | current gap |
-| --- | --- | --- | --- | --- |
-| `AMP-WALK-DP-01` | Walk Expert Transitions | `AMP-WALK-METHOD-v002#walk-expert-transitions` | `AW-M-01` | expose two clips/935 unique transitions separately from draws |
-| `AMP-WALK-DP-02` | Policy Walk Transitions | `AMP-WALK-METHOD-v002#policy-walk-transitions` | `AW-M-02` | unchanged, regression only |
-| `AMP-WALK-DP-03` | AMP Style Discriminator | `AMP-WALK-METHOD-v002#amp-style-discriminator` | `AW-M-03` | add quantile/zero-plateau diagnostics and pass sentinel |
-| `AMP-WALK-DP-04` | AMP-Regularized Walking Policy | `AMP-WALK-METHOD-v002#amp-regularized-walking-policy` | `AW-M-04` | retire default-pose task authority and verify V-trace connectivity |
+- Whole-body selector: `pelvis` subtree against itself.
+- Source parameters: four-entry force history, `10.0 N` threshold, `-0.1`
+  reward scale, one sensor slot, and no contact-pair reduction.
+- No right-hand-specific pose, distance, collision, or action constraint.
+- No default pose, gait phase, standing, running, fall recovery, motion reset,
+  discriminator tuning, AMP coefficient tuning, Motrix, or distillation.
+- `model_2000.pt` is an old-policy comparison artifact, never a resume source.
 
-## Semantic Source Of Truth
+## Owner Map
 
-| semantic object | active owner | consumers | legacy path | isolation rule | implementation evidence | live gap |
-| --- | --- | --- | --- | --- | --- | --- |
-| task posture authority | AMP owner YAML | G1 reward owner -> AMP combined reward | inherited `G1WalkFlat` pose scale | AMP `pose` must be absent/zero; legacy task unchanged | composed-config and reward connectivity tests | fresh sentinel |
-| expert support | manifest + `WalkMotionDataset` | learner expert sampler | preload/draw count | report clips=2, unique transitions=935, draws separately | dataset fixture and learner metrics | no extra forward clips exist |
-| style health | `AMPAPPOLearner.process_batch` | diagnostics and readiness evaluator | mean-only metrics | log p10/p50/p90, zero fraction, weighted components | deterministic batch test | tail-five sentinel gate |
-| score/update order | `AMPAPPOLearner` | APPO V-trace/update | none | preserve `D_k -> V-trace -> policy -> D_(k+1)` | existing order/connectivity regression | formal sentinel |
-| recovery identity | runner/config | checkpoint and tracker | `model_1850.pt` | fresh initialization only | no-load effective config and checkpoint identity | Step 3 blocked |
+| Semantic object | Owner | Consumer | Required boundary |
+| --- | --- | --- | --- |
+| self-contact declaration | AMP-only task XML fragment | MuJoCo model materialization | task-level fragment; do not modify `g1.xml` |
+| sensor-history capability | `SimBackend` public API | G1 AMP task | no env access to MuJoCo-private data |
+| native force history | `MuJoCoBackend` | public backend API | cache sensor address at init; no XML parsing in `step()` |
+| collision reducer | `G1AMPWalkEnv` | standard reward dispatch | exact source threshold/count semantics |
+| reward coefficient | `conf/appo/task/g1_amp_walk/mujoco.yaml` | Hydra -> task reward | `self_collisions: -0.1` only for AMP task |
+| task/style combination | existing AMP learner | V-trace/APPO | unchanged, exactly once, frozen `D_k` order |
+| process lifecycle | existing AsyncRunner/APPO owners | parent/collector | preserve spawn, close order, and lifecycle report |
+
+## Backend Feasibility Finding
+
+The installed `mujoco-uni==3.8.0` contact sensor directly supports
+`subtree1`, `subtree2`, force data, slot count, and reduction mode, so the
+source full-body selector can be represented without enumerating geom pairs.
+`BatchEnvPool.step(nstep=N)` returns only final-step `sensordata`, but its
+FULLPHYSICS state contains MuJoCo's native sensor history. The implemented path
+declares `nsample=4` in the AMP task sensor and reconstructs the native ring
+oldest-to-newest after the unchanged single `nstep=N` call. A split-step draft
+was rejected by a physical-trajectory differential test. Default tasks retain
+their current single-call fast path and do not configure this sensor/history.
+
+## Difficulty And Workload
+
+Difficulty is medium-high, not because the reward formula is complex, but
+because exact four-entry force history crosses the shared backend boundary and
+must survive partial resets without slowing unrelated tasks. The task/reward
+portion is small; backend history, regression coverage, and live evidence own
+most of the work.
+
+- Step 1 is the shared-backend risk boundary: roughly 3-5 focused engineering
+  hours including deterministic and regression tests.
+- Step 2 is the AMP-only connector and bounded-live boundary: roughly 2-4
+  focused engineering hours plus the 20-iteration sentinel.
+- Step 3 is primarily machine time: approximately the observed 34-minute
+  training duration plus artifact transfer, matched evaluation, and human
+  playback review. Allow about 1-2 hours of wall time without tuning.
 
 ## Step Map
 
-### Step 1 / 3: Activate Task/Style Authority
+### Step 1 / 3: Backend Sensor-History Contract
 
-Objective: version the human-confirmed training-signal authority before code.
-
-Scope: activate method/training contracts, preserve four design/block IDs,
-synchronize Concept Figure, registry, plan, checklist, and canvas.
-
-Non-scope: code, tests, simulator, or training.
-
-Expected evidence: atlas validator resolves all four design points to active
-contracts; history contracts are excluded from default recall.
-
-Stop condition: `AMP-WALK-METHOD-v002` and `AMP-WALK-TRAIN-v003` are the only
-active AMP contracts and the four-block figure matches them.
-
-Status: complete.
-
-### Step 2 / 3: Engineering And Short-Sentinel Closure
-
-Objective: make AMP style measurable before any material training run.
+Objective: add the reusable backend capability without changing any task reward
+or starting training.
 
 Scope:
 
-- set AMP task default-joint `pose` reward to zero without modifying
-  `G1WalkFlat`;
-- expose expert support and sampling identities;
-- expose frozen-scoring-batch policy logit quantiles, zero-style fraction, and
-  weighted task/style reward contributions;
-- add failing-first deterministic tests, focused regressions, composed config
-  verification, and one fresh 20-iteration official async sentinel;
-- inspect the sentinel event/log/lifecycle identity and persist evidence;
-- synchronize checklist, canvas, contracts, and Architecture current state.
+- add a public, backend-neutral sensor-history contract to `SimBackend` and a
+  MuJoCo implementation with cold-path sensor lookup, four-entry history, and
+  per-row reset clearing;
+- keep the default backend fast path unchanged when history is not configured;
+- write failing-first history ordering, sensor-address, forced-contact,
+  partial-reset, disabled-fast-path, and backend-interface tests;
+- measure the opt-in native sensor-history overhead with a minimal batched
+  backend probe;
+- persist backend evidence and update the Architecture map only if the public
+  implemented interface changes the current runtime ownership map.
 
-Non-scope: motion reset, motion-reset curriculum, new motion generation,
-discriminator sweeps, checkpoint resume, long GPU training, standing, running,
-recovery, gait control, Motrix, or distillation.
-
-Owner files/modules:
-
-- `conf/appo/task/g1_amp_walk/mujoco.yaml`: task reward identity;
-- `src/unilab/algos/torch/amp/motion_dataset.py`: support identity;
-- `src/unilab/algos/torch/amp/learner.py`: scoring-batch diagnostics;
-- AMP dataset/learner/runtime tests: deterministic and connector evidence;
-- formal `uv run train --algo appo --task g1_amp_walk --sim mujoco`: live sentinel.
-
-Core parameter path:
+Core connector:
 
 ```text
-AMP owner YAML pose=0
--> G1 reward component map
--> task reward batch
--> frozen D_k policy transition score
--> style reward and zero plateau
--> weighted combined reward
+configured contact sensor with `nsample=4`
+-> MuJoCo FULLPHYSICS native history
+-> backend-owned oldest-to-newest four-entry view
+-> public SimBackend history value
+```
+
+Expected evidence:
+
+- history has stable shape/order, clears only reset rows, and cannot leak an
+  old episode collision into a new episode;
+- default `BatchEnvPool.step(nstep=N)` behavior remains unchanged when history
+  is disabled;
+- forced contact produces nonzero force history through the public API;
+- timing delta is recorded without imposing a new percentage gate.
+
+Stop conditions:
+
+- source-equivalent history cannot be produced without env-private backend
+  access, XML parsing in the hot path, or bypassing the batched pool;
+- history ordering or partial-reset isolation is unproven;
+- sensor forces stay structurally zero under a deterministic forced-contact
+  probe;
+- default backend behavior or existing backend tests regress.
+
+Status: `COMPLETE`; see
+`evidence/2026-07-23-self-collision-steps1-2.md`.
+
+### Step 2 / 3: AMP Integration And Short Sentinel
+
+Objective: connect the verified backend capability to the isolated AMP task and
+prove the official async route remains healthy.
+
+Scope:
+
+- add an AMP-only task fragment with the symmetric `pelvis`-subtree contact
+  force sensor;
+- add the exact source collision reducer and `self_collisions: -0.1` owner YAML;
+- expose raw hit-count/rate diagnostics without adding a right-side objective;
+- write failing-first reducer, XML/sensor, config-isolation, legacy G1,
+  reward-connectivity, and async lifecycle tests;
+- run focused tests, config compose, unchanged-path regressions, and one fresh
+  20-iteration 2048-env official async sentinel;
+- persist implementation, timing, lifecycle, and diagnostic evidence, then
+  synchronize contracts/checklist/canvas/Architecture current state.
+
+Core connector:
+
+```text
+AMP task fragment contact sensor
+-> public backend four-entry history
+-> G1AMPWalk source reducer (>10 N, count history hits)
+-> self_collisions * -0.1 * ctrl_dt
+-> existing task/style mixture
 -> V-trace/APPO update
--> TensorBoard diagnostics
 ```
 
-Test classes:
+Expected evidence:
 
-- core param path: reward/style metrics and combined-reward consumer;
-- secondary contract path: Hydra config and expert support identity;
-- live sentinel path: real MuJoCo collector/IPC/learner/lifecycle.
+- deterministic reducer matches the AMP_mjlab oracle;
+- composed `G1AMPWalk` config contains the term while legacy G1 configs do not;
+- reward reaches task/V-trace exactly once;
+- sentinel emits finite collision/AMP metrics, completes 20/20, and reports a
+  clean collector lifecycle;
+- timing delta is recorded against the existing matched async evidence.
 
-Commands:
+Stop conditions:
 
-```bash
-uv run pytest -q tests/algos/test_amp_motion_dataset.py \
-  tests/algos/test_amp_appo_learner.py \
-  tests/algos/test_amp_appo_runtime.py \
-  tests/envs/locomotion/g1/test_amp_walk.py
+- task fragment changes robot XML or non-AMP G1 behavior;
+- reward reaches task/V-trace more than once;
+- collision metrics are structurally zero in the live route;
+- AMP health gate, capacity, forward progress, or lifecycle fails.
 
-uv run train --algo appo --task g1_amp_walk --sim mujoco \
-  training.device=mps training.collector_device=mps training.no_play=true \
-  algo.num_envs=2048 algo.steps_per_env=24 algo.max_iterations=20 \
-  algo.save_interval=0 algo.load_run=null \
-  training.log_dir=/private/tmp/unilab_amp_recovery_step2_sentinel
-```
+Status: `COMPLETE`; see
+`evidence/2026-07-23-self-collision-steps1-2.md`.
 
-Expected result: focused tests pass; fresh sentinel completes 20/20 with clean
-lifecycle and final-five means satisfying the v003 style-health gate.
+### Step 3 / 3: Fresh 2000-Iteration GPU Acceptance
 
-Stop condition: classify Step 2 as `pass`, `expert-support-blocker`,
-`style-saturation-blocker`, `lifecycle-fail`, or `capacity-fail`. On any failure,
-do not enter Step 3 and do not tune another mechanism in the same run.
+Objective: determine whether the source-parity repair resolves the observed
+self-contact while preserving the already working async AMP walk.
 
-Status: complete as `pass`. The formal MPS run completed 20/20 with clean
-lifecycle. All three frozen final-five gates passed, but policy-logit median
-cleared its threshold by only about 0.00027 and the final point regressed. See
-`evidence/2026-07-23-recovery-step2-style-authority.md`.
+Scope:
 
-### Step 3 / 3: Fresh Bounded GPU Quality Acceptance
+- freeze commit, composed config, motion manifest, command, seed set, and fresh
+  initialization identity;
+- run one 2000-iteration target-GPU training through the official detached
+  async route, with no resume and no parameter sweep;
+- collect console, TensorBoard event, checkpoint, hashes, and lifecycle report;
+- evaluate old `model_2000.pt` and the repaired checkpoint under the same
+  collision-enabled simulator and fixed-forward multi-seed playback manifest;
+- compare mean and p95 count of history entries above `10.0 N`, fixed-forward
+  tracking, termination/timeout behavior, and AMP health;
+- return the paired replays to the human owner for the final visible
+  hand-leg-contact judgment.
 
-Objective: train and judge human-like fixed-forward AMP walking.
+Acceptance:
 
-Scope: one fresh frozen target-GPU run, lifecycle postflight, artifacts,
-actor-only playback, and physical-quality judgment.
+- run completes 2000/2000 with clean lifecycle and finite diagnostics;
+- tail AMP health retains `policy_logit_p50 > -0.95`,
+  `policy_zero_style_fraction < 0.50`, and `style_reward_mean > 0.005`;
+- repaired policy is lower than the old policy on both mean and p95 symmetric
+  self-collision hit count under the matched evaluation manifest;
+- fixed-forward locomotion remains functional;
+- human playback review finds no persistent hand-leg catch.
 
-Non-scope: resume from `model_1850.pt`, repeated tuning, expanded locomotion,
-or Phase 2 distillation.
+Stop conditions:
 
-Expected evidence: frozen commit/config/data identity, TensorBoard curves,
-checkpoint hash, lifecycle report, and human-like walking playback.
+- lifecycle/capacity failure, AMP collapse, or loss of fixed-forward walking;
+- collision metrics fail to improve, or playback still shows persistent
+  contact. In that case classify `runtime-pass / collision-quality-fail` and
+  return to human design; do not add a hand-specific pose/distance term.
 
-Stop condition: one terminal quality/lifecycle classification.
-
-Status: blocked on separate human authorization. Step 2 passed; this execution
-stopped before starting Step 3.
-
-## Conditional Escalation
-
-- The source repository has only two compatible forward-walk clips. No extra
-  support may be invented or inferred from non-forward filenames.
-- Source AMP uses motion-frame reset, but v002 forbids it. If the sentinel
-  saturates, return this no-RSI boundary to the human owner instead of silently
-  adding motion reset.
-- Healthy AMP diagnostics with non-human playback would reopen the 195-D style
-  representation, not task reward coefficients.
-- Native/lifecycle anomalies return to the existing native owner-boundary
-  campaign without changing AMP semantics.
+Status: `BLOCKED` pending separate human authorization of the material GPU run.
 
 ## Authority Boundary
 
-Recovery Steps 1-2 are authorized in one closure. Step 3 is a material remote
-GPU training boundary and remains unauthorized.
+Engineering Steps 1-2 were authorized together and are complete. Material Step
+3 is not authorized. The next safe action is human review of the Step 1-2
+evidence followed by explicit Step 3 authorization or a stop decision.

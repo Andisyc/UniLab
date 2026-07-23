@@ -90,9 +90,14 @@ Start at `../distillation/README.md`. Active method commitments live only under
 inside the Concept Figure.
 
 The AMP Concept Figure is governed independently by `note/amp/contracts/`.
-Its active method semantics are Phase 1 fixed-forward walking only. Planned
-AMP owners remain in the engineering plan until implementation exists; they do
-not appear as implemented Method-to-Code or Runtime cards.
+Its active v003 method semantics are Phase 1 fixed-forward walking with task-
+owned minimum physical viability, including the source-parity symmetric full-
+body self-collision cost, while AMP alone owns human-like posture/style. The
+four Concept Figure blocks are unchanged. The backend sensor-history interface
+and AMP-only reward connector are now implemented and evidenced in
+`../amp/evidence/2026-07-23-self-collision-steps1-2.md`. They do not add a new
+method block; a broader Method-to-Code or Runtime Atlas expansion remains
+unnecessary for this isolated owner path.
 
 ## Validation
 

@@ -8,12 +8,11 @@ Concept Figure: `note/architecture/concept/04_amp_walk_async_method.data.json`.
 
 Concept Figure update owner: main Codex session under active contract versioning.
 
-Design Point Register: `contracts/active/method/AMP-WALK-METHOD-v002.md`.
+Design Point Register: `contracts/active/method/AMP-WALK-METHOD-v003.md`.
 
-Current step: original Steps 1-8 executed; Step 8 is
-`runtime-pass / quality-fail`. Recovery Steps 1-2 / 3 are complete. The short
-sentinel passed its frozen non-collapse gate with minimal logit margin. Recovery
-Step 3 is waiting for separate human authorization.
+Current step: source-parity symmetric self-collision Engineering Steps 1-2 are
+complete as `runtime-pass / style-health-pass /
+collision-connectivity-pass`. Work is paused before material Step 3 / 3.
 
 Completed:
 
@@ -53,12 +52,27 @@ Completed:
   expose expert/style health diagnostics, pass 24 focused tests plus the slow
   MuJoCo boundary test, and complete a fresh 20/20 official async sentinel with
   clean lifecycle. The tail-five logit gate passes by only about 0.00027.
+- complete the fresh 2000/2000 target-GPU baseline: 98,304,000 environment
+  steps in 33m41s, clean collector exit, non-collapsed final-100 AMP metrics,
+  arm swing in playback, and persistent right hand-leg contact;
+- confirm the source AMP task's whole-body symmetric self-collision signal as
+  the only new objective: four-entry force history, `10 N` threshold, `-0.1`
+  scale, and no hand-specific pose or distance term;
+- activate `AMP-WALK-METHOD-v003` and `AMP-WALK-TRAIN-v004`, preserve the four
+  Concept Figure blocks, and freeze the three-step repair plan.
+- complete self-collision Engineering Steps 1-2 with a public backend history
+  contract, task-level native `nsample=4` contact history, exact reducer/config,
+  legacy OFF isolation, raw collision diagnostics, and a clean 20/20 official
+  async sentinel that passes all three frozen AMP health gates;
+- reject the initial split-`nstep` implementation after a same-control physics
+  differential exposed solver-state drift, then preserve the original single
+  native `BatchEnvPool.step(nstep=N)` route by reading `mjSTATE_HISTORY`.
 
 Active files:
 
 - `note/amp/contracts/README.md`
-- `note/amp/contracts/active/method/AMP-WALK-METHOD-v002.md`
-- `note/amp/contracts/active/training/AMP-WALK-TRAIN-v003.md`
+- `note/amp/contracts/active/method/AMP-WALK-METHOD-v003.md`
+- `note/amp/contracts/active/training/AMP-WALK-TRAIN-v004.md`
 - `note/architecture/concept/04_amp_walk_async_method.data.json`
 - `note/amp/plans/current_engineering_plan.md`
 - `note/amp/checklists/current.md`
@@ -75,9 +89,12 @@ Active files:
 - `note/amp/evidence/2026-07-23-performance-gate-acceptance-revision.md`
 - `note/amp/evidence/2026-07-23-step8-runtime-pass-quality-fail.md`
 - `note/amp/evidence/2026-07-23-recovery-step2-style-authority.md`
+- `note/amp/evidence/2026-07-23-step3-baseline-self-collision-gap.md`
+- `note/amp/evidence/2026-07-23-self-collision-steps1-2.md`
 
-Active commands: none. No training process is running. The failed checkpoint is
-evidence/playback-only and is not eligible for recovery resume.
+Active commands: none. No training process is running. `model_1850.pt` and
+`model_2000.pt` are evidence/playback-only and are not eligible for repair-run
+resume.
 
 Verified evidence: see `evidence/2026-07-21-static-migration-baseline.md`.
 
@@ -88,11 +105,12 @@ Unresolved risks:
 
 - only two source forward-walk clips and 935 unique adjacent transitions exist;
   no additional compatible source support is currently available;
-- the short sentinel is non-collapsed by the frozen mean gate, but its logit
-  margin is minimal and the final point regresses; material-run stability and
-  human-like playback remain unverified;
-- MuJoCo sensor narrowing remains an optional performance backlog item.
+- the native sensor/history path adds about `5.33%` median env-step overhead in
+  the local 512-env diagnostic, but preserves the single batched `nstep=N`
+  physics call and the verified async lifecycle;
+- the new reward may reduce contact without exceeding the source author's
+  overall style ceiling; no broader style claim is part of this repair.
 
-Next action: wait for explicit authorization of Recovery Step 3. If authorized,
-freeze one target-GPU command/config/data identity and run from scratch; do not
-resume `model_1850.pt` or the sentinel `model_20.pt`.
+Next action: review the Steps 1-2 evidence and wait for explicit authorization
+of material Step 3 / 3. Step 3 must train from scratch and perform matched
+old/new collision evaluation plus human playback review.

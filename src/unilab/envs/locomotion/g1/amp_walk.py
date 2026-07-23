@@ -12,7 +12,9 @@ from unilab.algos.torch.amp.spec import (
     AMP_OBSERVATION_DIM,
     build_amp_observation_from_selected,
 )
+from unilab.assets import ASSETS_ROOT_PATH
 from unilab.base import registry
+from unilab.base.scene import SceneCfg
 from unilab.envs.locomotion.common.commands import Commands
 from unilab.envs.locomotion.g1.joystick import G1WalkEnv, G1WalkFlatCfg
 
@@ -33,12 +35,39 @@ def _fixed_forward_commands() -> Commands:
     )
 
 
+def _amp_walk_scene() -> SceneCfg:
+    return SceneCfg(
+        model_file=str(ASSETS_ROOT_PATH / "robots" / "g1" / "scene_flat.xml"),
+        fragment_files=[str(ASSETS_ROOT_PATH / "robots" / "g1" / "amp_walk_task.xml")],
+    )
+
+
+def compute_self_collision_cost(
+    force_history: np.ndarray, *, force_threshold: float
+) -> np.ndarray:
+    """Count history entries where any contact slot exceeds the force threshold."""
+    history = np.asarray(force_history)
+    if history.ndim != 3 or history.shape[-1] % 3 != 0:
+        raise ValueError(
+            "force_history must have shape (num_envs, history_length, 3 * num_slots), "
+            f"got {history.shape}"
+        )
+    slot_forces = history.reshape(history.shape[0], history.shape[1], -1, 3)
+    force_magnitude = np.linalg.norm(slot_forces, axis=-1)
+    hit = np.any(force_magnitude > float(force_threshold), axis=-1)
+    return np.asarray(np.sum(hit, axis=-1), dtype=np.float32)
+
+
 @registry.envcfg("G1AMPWalk")
 @dataclass
 class G1AMPWalkCfg(G1WalkFlatCfg):
+    scene: SceneCfg = field(default_factory=_amp_walk_scene)
     commands: Commands = field(default_factory=_fixed_forward_commands)
     mode_observation: bool = False
     add_body_sensors: bool = True
+    self_collision_sensor_name: str = "self_collision"
+    self_collision_history_length: int = 4
+    self_collision_force_threshold: float = 10.0
 
 
 class G1AMPWalkEnv(G1WalkEnv):
@@ -47,6 +76,10 @@ class G1AMPWalkEnv(G1WalkEnv):
     def __init__(self, cfg: G1AMPWalkCfg, num_envs=1, backend_type="mujoco"):
         self._validate_phase1_cfg(cfg)
         super().__init__(cfg, num_envs=num_envs, backend_type=backend_type)
+        self._backend.configure_sensor_history(
+            cfg.self_collision_sensor_name,
+            history_length=cfg.self_collision_history_length,
+        )
         names = (*AMP_BODY_NAMES, AMP_ANCHOR_BODY_NAME)
         self._amp_body_ids_with_anchor = self._backend.get_body_ids(names)
 
@@ -71,6 +104,43 @@ class G1AMPWalkEnv(G1WalkEnv):
             raise ValueError(
                 "G1AMPWalk does not allow gait-phase rewards: " + ", ".join(enabled_gait_terms)
             )
+        if float(scales.get("self_collisions", 0.0)) != -0.1:
+            raise ValueError("G1AMPWalk requires self_collisions reward scale -0.1")
+        if cfg.self_collision_sensor_name != "self_collision":
+            raise ValueError("G1AMPWalk requires the self_collision sensor")
+        if cfg.self_collision_history_length != 4:
+            raise ValueError("G1AMPWalk requires self-collision history length 4")
+        if cfg.self_collision_force_threshold != 10.0:
+            raise ValueError("G1AMPWalk requires self-collision force threshold 10.0 N")
+
+    def _init_reward_functions(self) -> None:
+        super()._init_reward_functions()
+        self._reward_fns["self_collisions"] = self._reward_self_collisions
+
+    def _reward_self_collisions(self, ctx) -> np.ndarray:
+        history = self._backend.get_sensor_history(self._cfg.self_collision_sensor_name)
+        cost = compute_self_collision_cost(
+            history,
+            force_threshold=self._cfg.self_collision_force_threshold,
+        )
+        ctx.info["self_collision_hit_count"] = cost
+        ctx.info["self_collision_hit_rate"] = np.asarray(
+            cost / float(self._cfg.self_collision_history_length), dtype=np.float32
+        )
+        return cost
+
+    def _compute_reward(self, info, linvel, gyro, gravity, dof_pos, dof_vel) -> np.ndarray:
+        reward = super()._compute_reward(info, linvel, gyro, gravity, dof_pos, dof_vel)
+        steps = np.asarray(info.get("steps", np.zeros((self._num_envs,), dtype=np.uint32)))
+        if self._enable_reward_log and int(steps[0]) % 4 == 0:
+            log = info.setdefault("log", {})
+            log["reward/self_collision_hit_count_mean"] = float(
+                np.mean(info["self_collision_hit_count"])
+            )
+            log["reward/self_collision_hit_rate_mean"] = float(
+                np.mean(info["self_collision_hit_rate"])
+            )
+        return reward
 
     @property
     def obs_groups_spec(self) -> dict[str, int]:

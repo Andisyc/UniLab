@@ -1,0 +1,6 @@
+<mujoco>
+  <sensor>
+    <contact name="self_collision" subtree1="pelvis" subtree2="pelvis"
+      data="force" num="1" reduce="none" nsample="4"/>
+  </sensor>
+</mujoco>

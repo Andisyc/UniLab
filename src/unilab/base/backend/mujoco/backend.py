@@ -375,6 +375,21 @@ class MuJoCoBackend(SimBackend):
                 dim = self._model.sensor_dim[i]
                 self._sensor_indices[name] = list(range(adr, adr + dim))
                 self._sensor_views[name] = self._sensor_data[:, adr : adr + dim]
+        self._sensor_histories: dict[str, np.ndarray] = {}
+        self._sensor_history_specs: dict[str, tuple[int, int, int]] = {}
+        self._sensor_ids = {
+            name: i
+            for i in range(self._model.nsensor)
+            if (name := mujoco.mj_id2name(self._model, mujoco.mjtObj.mjOBJ_SENSOR, i))
+            is not None
+        }
+        history_prefix = (
+            mujoco.mjtState.mjSTATE_TIME
+            | mujoco.mjtState.mjSTATE_QPOS
+            | mujoco.mjtState.mjSTATE_QVEL
+            | mujoco.mjtState.mjSTATE_ACT
+        )
+        self._sensor_history_state_offset = mujoco.mj_stateSize(self._model, history_prefix)
 
         # Zero-copy view mapping for tracked-body sensors.
         if self.add_body_sensors and self._valid_bnames:
@@ -806,6 +821,7 @@ class MuJoCoBackend(SimBackend):
 
         t0 = time.perf_counter()
         self._sensor_data[:] = sensor_np.astype(self._np_dtype)
+        self._refresh_sensor_histories_from_state()
         refresh_cache_ms = (time.perf_counter() - t0) * 1000.0
 
         return {
@@ -849,6 +865,7 @@ class MuJoCoBackend(SimBackend):
 
             t0 = time.perf_counter()
             self._sensor_data[:] = sensor_np.astype(self._np_dtype)
+            self._refresh_sensor_histories_from_state()
             refresh_cache_ms += (time.perf_counter() - t0) * 1000.0
 
         if has_pending_xfrc:
@@ -885,6 +902,7 @@ class MuJoCoBackend(SimBackend):
 
         self._physics_state[env_indices] = state_out.astype(self._np_dtype)
         self._sensor_data[env_indices] = sensor_np.astype(self._np_dtype)
+        self._refresh_sensor_histories_from_state()
 
     def get_dr_capabilities(self) -> DomainRandomizationCapabilities:
         return DomainRandomizationCapabilities(
@@ -1148,6 +1166,54 @@ class MuJoCoBackend(SimBackend):
             return np.empty((self._num_envs, 0), dtype=self._np_dtype)
         values = [self._sensor_views[name].reshape(self._num_envs, -1) for name in sensor_names]
         return np.concatenate(values, axis=1)
+
+    def configure_sensor_history(self, name: str, *, history_length: int) -> None:
+        if history_length <= 0:
+            raise ValueError(f"history_length must be positive, got {history_length}")
+        if name not in self._sensor_ids:
+            raise ValueError(f"Sensor '{name}' not found in MuJoCo model")
+        existing = self._sensor_histories.get(name)
+        sensor_id = self._sensor_ids[name]
+        native_history_length = int(self._model.sensor_history[sensor_id, 0])
+        if native_history_length != history_length:
+            raise ValueError(
+                f"Sensor '{name}' declares native history length "
+                f"{native_history_length}, not {history_length}"
+            )
+        sensor_dim = int(self._model.sensor_dim[sensor_id])
+        expected_shape = (self._num_envs, int(history_length), sensor_dim)
+        if existing is not None:
+            if existing.shape != expected_shape:
+                raise ValueError(
+                    f"Sensor '{name}' history is already configured with length "
+                    f"{existing.shape[1]}, not {history_length}"
+                )
+            return
+        self._sensor_histories[name] = np.zeros(expected_shape, dtype=self._np_dtype)
+        self._sensor_history_specs[name] = (
+            int(self._model.sensor_historyadr[sensor_id]),
+            int(history_length),
+            sensor_dim,
+        )
+        self._refresh_sensor_histories_from_state()
+
+    def get_sensor_history(self, name: str) -> np.ndarray:
+        try:
+            return self._sensor_histories[name]
+        except KeyError as exc:
+            raise ValueError(f"Sensor history '{name}' is not configured") from exc
+
+    def _refresh_sensor_histories_from_state(self) -> None:
+        for name, history in self._sensor_histories.items():
+            history_adr, history_length, sensor_dim = self._sensor_history_specs[name]
+            block_start = self._sensor_history_state_offset + history_adr
+            latest = np.rint(self._physics_state[:, block_start + 1]).astype(np.int64)
+            values_start = block_start + 2 + history_length
+            values = self._physics_state[
+                :, values_start : values_start + history_length * sensor_dim
+            ].reshape(self._num_envs, history_length, sensor_dim)
+            order = (latest[:, None] + 1 + np.arange(history_length)) % history_length
+            history[:] = np.take_along_axis(values, order[:, :, None], axis=1)
 
     def get_site_jacobian_w(
         self,

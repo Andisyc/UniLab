@@ -120,5 +120,21 @@ def test_g1_amp_walk_owner_yaml_composes_without_gait_or_distillation() -> None:
         [1.0, 0.0, 0.0],
     ]
     assert "pose" not in resolved["reward"]["scales"]
+    assert resolved["reward"]["scales"]["self_collisions"] == -0.1
+    assert resolved["env"]["self_collision_sensor_name"] == "self_collision"
+    assert resolved["env"]["self_collision_history_length"] == 4
+    assert resolved["env"]["self_collision_force_threshold"] == 10.0
     assert not any("feet_phase" in key for key in resolved["reward"]["scales"])
     assert "distill" not in str(resolved).lower()
+
+
+def test_g1_walk_flat_owner_yaml_keeps_self_collision_history_off() -> None:
+    with initialize_config_dir(config_dir=str(_ROOT / "conf" / "appo"), version_base="1.3"):
+        cfg = compose(config_name="config", overrides=["task=g1_walk_flat/mujoco"])
+
+    resolved = OmegaConf.to_container(cfg, resolve=True)
+    assert isinstance(resolved, dict)
+    assert "self_collisions" not in resolved["reward"]["scales"]
+    assert "self_collision_sensor_name" not in resolved["env"]
+    assert "self_collision_history_length" not in resolved["env"]
+    assert "self_collision_force_threshold" not in resolved["env"]

@@ -1,9 +1,10 @@
 ---
 contract_id: AMP-WALK-TRAIN-v003
-status: active
+status: superseded
 effective_date: 2026-07-23
 updated_date: 2026-07-23
 supersedes: AMP-WALK-TRAIN-v002
+superseded_by: AMP-WALK-TRAIN-v004
 scope: Phase 1 AMP on UniLab asynchronous APPO with diagnostic-only throughput overhead
 method_contract: AMP-WALK-METHOD-v002
 concept_figure: note/architecture/concept/04_amp_walk_async_method.data.json

@@ -1,9 +1,9 @@
 ---
-contract_id: AMP-WALK-METHOD-v002
+contract_id: AMP-WALK-METHOD-v003
 status: active
 effective_date: 2026-07-23
 updated_date: 2026-07-23
-supersedes: AMP-WALK-METHOD-v001
+supersedes: AMP-WALK-METHOD-v002
 scope: Phase 1 fixed-forward walk-only AMP on MuJoCo G1
 concept_figure: note/architecture/concept/04_amp_walk_async_method.data.json
 ---
@@ -28,8 +28,8 @@ upright reset is only an initial condition.
 | --- | --- | --- | --- | --- |
 | AMP-WALK-DP-01 | Walk Expert Transitions | AW-M-01 | [Walk Expert Transitions](#walk-expert-transitions) | Two source forward clips and 935 unique adjacent transitions verified; draw count is reported separately from support |
 | AMP-WALK-DP-02 | Policy Walk Transitions | AW-M-02 | [Policy Walk Transitions](#policy-walk-transitions) | Implemented through env, terminal owner, spawned IPC, and staging |
-| AMP-WALK-DP-03 | AMP Style Discriminator | AW-M-03 | [AMP Style Discriminator](#amp-style-discriminator) | Learner-only D/normalizer/replay implemented; non-saturation diagnostics and fresh sentinel pending |
-| AMP-WALK-DP-04 | AMP-Regularized Walking Policy | AW-M-04 | [AMP-Regularized Walking Policy](#amp-regularized-walking-policy) | Task/style authority repaired in contract; implementation and fresh sentinel pending |
+| AMP-WALK-DP-03 | AMP Style Discriminator | AW-M-03 | [AMP Style Discriminator](#amp-style-discriminator) | Learner-only D/normalizer/replay and 2000-iteration non-collapse evidence verified |
+| AMP-WALK-DP-04 | AMP-Regularized Walking Policy | AW-M-04 | [AMP-Regularized Walking Policy](#amp-regularized-walking-policy) | Source-parity full-body self-collision signal confirmed; implementation pending |
 
 ## Method Closure
 
@@ -67,13 +67,21 @@ policy task transition -> fixed-forward task reward -> combined reward
   must not penalize deviation from default joint posture. It contains no
   standing, stop-transition, gait-phase, contact-schedule, running, or recovery
   objective.
+- Self-collision cost: the task owner symmetrically observes contact force
+  between the whole G1 subtree rooted at `pelvis` and itself. It counts entries
+  in a four-physics-substep history for which any contact force magnitude is
+  greater than `10.0 N`, then applies source weight `-0.1` through the standard
+  task-reward dispatch. This is a minimum-physical-viability signal, not a
+  posture target.
 - AMP style reward:
   `r_amp = amp_coef * clamp(1 - 0.25 * (D_k(x) - 1)^2, min=0)`.
 - Combined reward: one Hydra-owned nonnegative combination of `r_task` and
   `r_amp`. The two components and final reward must be logged separately, and
   no fallback calculation may bypass this owner.
 
-Numeric coefficients are configuration choices inside this contract. A
+The self-collision threshold, history length, and weight above are frozen
+source-parity semantics for this repair. Other numeric coefficients are
+configuration choices inside this contract. A
 nonzero default-joint-pose reward is forbidden because it gives the task owner
 direct authority over walking posture. Changing the scoring object, adding a
 new task objective, or changing the reward owner is a semantic change and
@@ -157,13 +165,15 @@ requires a new proposal/version.
 - Meaning: APPO learns a deployable actor from the fixed-forward task signal and
   the learner-owned AMP style reward.
 - Inputs: actor/critic rollout payload, behavior log probability, task reward,
-  done/truncated/final state, and `D_k` style reward.
+  done/truncated/final state, symmetric full-body self-collision cost, and
+  `D_k` style reward.
 - Output: updated actor/critic weights and an actor-only deployment artifact.
 - Assumptions: V-trace consumes the final combined reward; asynchronous behavior
   policy staleness remains owned by APPO.
 - Style authority invariant: task reward may demand fixed-forward motion and
-  minimum physical viability, but AMP is the sole owner of human-like joint
-  posture and transition style.
+  minimum physical viability, including self-collision avoidance, but AMP is
+  the sole owner of human-like joint posture and transition style. No body-side,
+  hand, joint-pose, or target-distance exception is allowed.
 - Ownership boundary: the AMP learner prepares the final reward and update
   order; generic APPO owns V-trace/actor/critic mechanics; the collector only
   receives actor/critic weights.
@@ -172,13 +182,15 @@ requires a new proposal/version.
 - Required order: freeze `D_k` for the staged batch, score every transition once,
   form the combined reward, run V-trace/APPO actor/critic update, update the
   discriminator to `D_(k+1)`, then publish actor/critic weights.
-- Forbidden: default-joint-pose reward, zero-command standing acceptance, gait
+- Forbidden: default-joint-pose reward, right-hand-only pose/distance/contact
+  reward, zero-command standing acceptance, gait
   ownership, synchronous PPO fallback, discriminator deployment, checkpoint
   resume from the v001 quality-fail run, or claiming policy quality from finite
   losses/checkpoint creation alone.
-- Required evidence: reward-to-V-trace consumer connectivity, update-order
-  trace, actor/critic and discriminator version identity, formal async smoke,
-  and bounded walking playback.
+- Required evidence: source-equivalent collision reducer values, backend-owned
+  four-substep history and reset isolation, reward-to-V-trace consumer
+  connectivity, update-order trace, actor/critic and discriminator version
+  identity, formal async smoke, and bounded walking playback.
 
 ## Phase Boundary
 
@@ -189,11 +201,14 @@ contract, the distillation contracts, or the Phase 1 runtime.
 
 ## Current Acceptance Status
 
-This version is active and human-confirmed. It supersedes v001 after Step 8
-completed as `runtime-pass / quality-fail`. The async route remains accepted;
-the repaired task/style authority and support/health diagnostics are
-implemented. The fresh v003 sentinel passed its frozen tail-five non-collapse
-gate with minimal logit margin. Human-like walking quality remains unverified.
+This version is active and human-confirmed. It supersedes v002 after the fresh
+2000-iteration run completed with a clean async lifecycle and a non-collapsed
+AMP signal, while playback exposed persistent hand-leg self-contact. The source
+repository uses a whole-body symmetric self-collision cost with `-0.1` weight,
+`10.0 N` threshold, and four-entry force history. UniLab now implements and
+connects that signal through the public backend and AMP task owners; the frozen
+short sentinel passes. The completed `model_2000.pt` and new `model_20.pt`
+remain evidence only and must not seed the material repaired run.
 
 The source AMP task resets environments from motion frames. Phase 1 continues
 to forbid motion reset, motion-reset curriculum, recovery reset, and delayed

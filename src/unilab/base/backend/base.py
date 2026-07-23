@@ -735,3 +735,11 @@ class SimBackend(abc.ABC):
         values = [np.asarray(self.get_sensor_data(name)) for name in sensor_names]
         flat_values = [value.reshape(value.shape[0], -1) for value in values]
         return np.concatenate(flat_values, axis=1)
+
+    def configure_sensor_history(self, name: str, *, history_length: int) -> None:
+        """Enable backend-owned physics-substep history for one sensor."""
+        raise NotImplementedError(f"{self.__class__.__name__} does not support sensor history")
+
+    def get_sensor_history(self, name: str) -> np.ndarray:
+        """Return ``(num_envs, history_length, sensor_dim)`` oldest-first history."""
+        raise NotImplementedError(f"{self.__class__.__name__} does not support sensor history")

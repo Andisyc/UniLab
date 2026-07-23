@@ -2,16 +2,16 @@
 
 Status values: `PASS`, `PARTIAL`, `PENDING`, `BLOCKED`.
 
-Current cursor: original Step 8 is `runtime-pass / quality-fail`. Recovery
-Steps 1-2 / 3 are complete; the short sentinel passed with minimal logit
-margin. Recovery Step 3 is waiting for separate human authorization.
+Current cursor: symmetric self-collision Engineering Steps 1-2 are
+`runtime-pass / style-health-pass / collision-connectivity-pass`; paused before
+the separately authorized material Step 3 / 3.
 
 ## Governance Gate
 
 | Item | Owner | S tier / T kind | Status | Evidence |
 | --- | --- | --- | --- | --- |
-| Active method semantics | AMP contract registry | S0 / T-contract | PASS | `contracts/active/method/AMP-WALK-METHOD-v002.md` |
-| Active async training semantics | AMP contract registry | S0 / T-contract | PASS | `contracts/active/training/AMP-WALK-TRAIN-v003.md` |
+| Active method semantics | AMP contract registry | S0 / T-contract | PASS | `contracts/active/method/AMP-WALK-METHOD-v003.md` |
+| Active async training semantics | AMP contract registry | S0 / T-contract | PASS | `contracts/active/training/AMP-WALK-TRAIN-v004.md` |
 | Four design points map one-to-one to Concept Figure | docs governance | S0-S1 / T-contract | PASS | `concept/04_amp_walk_async_method.data.json`; atlas checker |
 | Phase 2 distillation isolation | AMP contracts/plan | S0 / T-contract | PASS | Phase boundary in both active contracts |
 
@@ -41,7 +41,7 @@ margin. Recovery Step 3 is waiting for separate human authorization.
 | 8 | Frozen bounded run completes with finite diagnostics and clean postflight | formal live owner | S4 / T-live,T-performance | PASS | `evidence/2026-07-23-step8-runtime-pass-quality-fail.md`; 1850/1850 resume, clean lifecycle, checkpoint/event hashes |
 | 8 | Playback shows fixed-forward human-like AMP walking | playback/acceptance owner | S4 / T-live | BLOCKED | fixed-forward locomotion present, but visual style remains task-shape dominated; discriminator/style evidence classifies quality fail |
 
-## Recovery Proposal Acceptance
+## Prior Recovery Acceptance
 
 | Recovery step | Acceptance item | Owner | S tier / T kind | Status | Evidence pointer |
 | --- | --- | --- | --- | --- | --- |
@@ -50,7 +50,24 @@ margin. Recovery Step 3 is waiting for separate human authorization.
 | 2 / 3 | Expert support and sampling identities are distinct and logged | dataset/learner | S1-S2 / T-oracle,T-value,T-connect | PASS | 2 clips, 935 unique transitions, 4096 draws/update in sentinel |
 | 2 / 3 | Frozen scoring batch logs quantiles, zero plateau, and weighted reward components | AMP learner | S1-S2 / T-value,T-connect | PASS | deterministic regression and TensorBoard event |
 | 2 / 3 | Fresh 20-iteration official async sentinel passes v003 health/lifecycle gate | formal runtime | S3 / T-live,T-order,T-performance | PASS | `evidence/2026-07-23-recovery-step2-style-authority.md`; narrow tail-five pass; clean 20/20 lifecycle |
-| 3 / 3 | Fresh bounded target-GPU run produces lifecycle and human-like playback evidence | formal live/playback owner | S4 / T-live,T-performance | BLOCKED | Step 2 passed; separate human authorization required |
+| 3 / 3 | Fresh bounded target-GPU run produces lifecycle and human-like playback evidence | formal live/playback owner | S4 / T-live,T-performance | PARTIAL | `evidence/2026-07-23-step3-baseline-self-collision-gap.md`; runtime/style health pass, persistent self-contact gap |
+
+The prior `3 / 3` row is closed by the 2000-iteration baseline as
+`runtime-pass / style-health-pass / self-collision-gap`, not promoted to a
+human-quality pass.
+
+## Symmetric Self-Collision Repair Acceptance
+
+| Repair step | Acceptance item | Owner | S tier / T kind | Status | Evidence pointer |
+| --- | --- | --- | --- | --- | --- |
+| 1 / 3 | Public backend history returns four ordered force entries and clears reset rows without env-private access | `SimBackend`/MuJoCo owner | S1-S2 / T-shape,T-order,T-persist | PASS | `evidence/2026-07-23-self-collision-steps1-2.md`; native-ring/order/contact/reset tests |
+| 1 / 3 | Legacy backend fast path remains unchanged when history is disabled | backend owner | S2 / T-diff,T-performance | PASS | one-call physical differential; 288-test impact suite; 5.33% ON diagnostic |
+| 2 / 3 | AMP-only task fragment reproduces the source `pelvis`-subtree force sensor and leaves robot XML unchanged | scene/task owner | S1 / T-contract,T-diff | PASS | task XML/config isolation tests; Steps 1-2 evidence |
+| 2 / 3 | Reducer matches `>10 N` source oracle and `self_collisions: -0.1` reaches task/V-trace once | G1 AMP reward/config owner | S1-S2 / T-value,T-connect | PASS | strict-threshold/multi-slot oracle; nonzero TensorBoard reward and raw hit metrics |
+| 2 / 3 | Fresh 20-iteration official async sentinel has finite collision/AMP metrics and clean lifecycle | formal runtime | S3 / T-live,T-order,T-performance | PASS | Steps 1-2 evidence; all three frozen tail-five gates; clean lifecycle |
+| 3 / 3 | Fresh 2000-iteration target-GPU run completes from scratch with healthy AMP and clean lifecycle | formal live owner | S4 / T-live,T-performance | BLOCKED | Step 2 pass and separate Step 3 authorization required |
+| 3 / 3 | Matched old/new evaluation lowers mean and p95 symmetric collision hits while preserving forward walking | evaluation/playback owner | S4 / T-diff,T-live | BLOCKED | paired checkpoints and fixed evaluation manifest required |
+| 3 / 3 | Human playback review finds no persistent hand-leg catch | human acceptance owner | S4 / T-live | BLOCKED | paired replay review required |
 
 ## S/T Matrix
 
