@@ -14,6 +14,42 @@ from unilab.algos.torch.amp.spec import AMP_OBSERVATION_DIM
 from unilab.algos.torch.appo.learner import APPOLearner
 
 
+def amp_policy_health_metrics(
+    *,
+    logits: torch.Tensor,
+    style_reward: torch.Tensor,
+    task_reward: torch.Tensor,
+    task_reward_lerp: float,
+    expert_motion_count: int,
+    expert_transition_count: int,
+    expert_draw_count: int,
+) -> dict[str, float]:
+    """Summarize frozen-scoring-batch AMP authority without changing training."""
+    flat_logits = logits.detach().reshape(-1)
+    flat_style = style_reward.detach().reshape(-1)
+    if flat_logits.numel() == 0 or flat_style.numel() != flat_logits.numel():
+        raise ValueError("AMP health metrics require matching non-empty policy values")
+    max_items = 8192
+    stride = max(flat_logits.numel() // max_items, 1)
+    sampled_logits = flat_logits[::stride][:max_items].float().cpu()
+    sampled_style = flat_style[::stride][:max_items].float().cpu()
+    quantiles = torch.quantile(sampled_logits, torch.tensor([0.1, 0.5, 0.9]))
+    style_weight = 1.0 - float(task_reward_lerp)
+    return {
+        "amp/policy_logit_p10": float(quantiles[0].item()),
+        "amp/policy_logit_p50": float(quantiles[1].item()),
+        "amp/policy_logit_p90": float(quantiles[2].item()),
+        "amp/policy_zero_style_fraction": float((sampled_style <= 0.0).float().mean().item()),
+        "amp/task_weighted_mean": float(
+            (float(task_reward_lerp) * task_reward.detach().mean()).item()
+        ),
+        "amp/style_weighted_mean": float((style_weight * style_reward.detach().mean()).item()),
+        "amp/expert_motion_count": float(expert_motion_count),
+        "amp/expert_transition_count": float(expert_transition_count),
+        "amp/expert_draw_count": float(expert_draw_count),
+    }
+
+
 class AMPDiscriminator(nn.Module):
     def __init__(self, input_dim: int, hidden_dims: Sequence[int], *, reward_coef: float) -> None:
         super().__init__()
@@ -198,6 +234,8 @@ class AMPAPPOLearner(APPOLearner):
         expert = WalkMotionDataset.from_manifest(amp_motion_manifest)
         self._expert_current = torch.from_numpy(expert.current_transitions).to(device)
         self._expert_next = torch.from_numpy(expert.next_transitions).to(device)
+        self.amp_expert_motion_count = expert.num_motions
+        self.amp_expert_transition_count = expert.num_transitions
         self.amp_generator = torch.Generator(device="cpu").manual_seed(int(amp_seed))
         self.discriminator_version = 0
         self.amp_order_trace: list[tuple[str, int]] = []
@@ -249,6 +287,19 @@ class AMPAPPOLearner(APPOLearner):
                 "amp/combined_reward_mean": float(batch_dict["rewards"].mean().item()),
                 "amp/replay_size": float(self.amp_replay.size),
             }
+        )
+        metrics.update(
+            amp_policy_health_metrics(
+                logits=batch_dict["_amp_logits"],
+                style_reward=batch_dict["_amp_style_rewards"],
+                task_reward=batch_dict["_amp_task_rewards"],
+                task_reward_lerp=self.amp_task_reward_lerp,
+                expert_motion_count=self.amp_expert_motion_count,
+                expert_transition_count=self.amp_expert_transition_count,
+                expert_draw_count=(
+                    self.amp_discriminator_batch_size * self.amp_discriminator_updates
+                ),
+            )
         )
         return metrics
 

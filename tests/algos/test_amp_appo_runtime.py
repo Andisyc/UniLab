@@ -119,5 +119,6 @@ def test_g1_amp_walk_owner_yaml_composes_without_gait_or_distillation() -> None:
         [1.0, 0.0, 0.0],
         [1.0, 0.0, 0.0],
     ]
+    assert "pose" not in resolved["reward"]["scales"]
     assert not any("feet_phase" in key for key in resolved["reward"]["scales"])
     assert "distill" not in str(resolved).lower()

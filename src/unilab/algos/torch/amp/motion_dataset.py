@@ -73,6 +73,7 @@ class WalkMotionDataset:
         if np.any(self._transition_counts < 1):
             raise ValueError("every walk motion must contain at least two frames")
         self._transition_ends = np.cumsum(self._transition_counts)
+        self.num_motions = len(names)
         self.num_transitions = int(self._transition_ends[-1])
         self._current = np.ascontiguousarray(
             np.concatenate([motion[:-1] for motion in features], axis=0)

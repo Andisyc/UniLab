@@ -1,17 +1,70 @@
 ---
-contract_id: AMP-WALK-TRAIN-v002
+contract_id: AMP-WALK-TRAIN-v003
 status: active
 effective_date: 2026-07-23
 updated_date: 2026-07-23
-supersedes: AMP-WALK-TRAIN-v001
+supersedes: AMP-WALK-TRAIN-v002
 scope: Phase 1 AMP on UniLab asynchronous APPO with diagnostic-only throughput overhead
-method_contract: AMP-WALK-METHOD-v001
+method_contract: AMP-WALK-METHOD-v002
 concept_figure: note/architecture/concept/04_amp_walk_async_method.data.json
-implementation_status: async_route_verified
-promotion_status: step_8_ready
+implementation_status: style_authority_recovery
+promotion_status: recovery_step_2
 ---
 
 # AMP Walk Asynchronous Training Contract
+
+## Recovery Decision
+
+Step 8 under v002 completed as `runtime-pass / quality-fail`. Recovery starts
+from random actor/critic/discriminator initialization. `model_1850.pt` is
+evidence/playback-only and cannot initialize or normalize the recovery run.
+
+The AMP owner YAML must set default-joint `pose` reward to zero. The remaining
+task terms own fixed-forward motion and minimum physical viability only. AMP is
+the only owner of human-like joint posture and transition style.
+
+The expert owner must report source clip count, unique adjacent-transition
+count, and sampled draw count separately. The current accepted support is two
+clips and 935 unique transitions; a 200,000-draw preload or repeated sampling
+does not increase that support identity.
+
+## Short Sentinel Gate
+
+Before the material Step 3 GPU run, one fresh official async sentinel must run
+for 20 learner iterations at 2048 environments and 24 steps per environment.
+It must use the active owner config, no checkpoint load, no motion reset, and
+no playback.
+
+The learner must emit these batch-owner diagnostics:
+
+- `amp/policy_logit_p10`, `amp/policy_logit_p50`, and
+  `amp/policy_logit_p90` from the frozen `D_k` scoring batch;
+- `amp/policy_zero_style_fraction`, where style reward equals the clamped zero
+  plateau;
+- `amp/task_weighted_mean` and `amp/style_weighted_mean` after applying the
+  configured reward mixture;
+- `amp/expert_motion_count`, `amp/expert_transition_count`, and
+  `amp/expert_draw_count`.
+
+The final five iterations pass the style-health gate only when all diagnostics
+are finite and their means satisfy:
+
+```text
+amp/policy_logit_p50 > -0.95
+amp/policy_zero_style_fraction < 0.50
+amp/style_reward_mean > 0.005
+```
+
+The `-0.95` and `0.005` limits are coupled by the active AMP formula: a logit
+of `-0.95` yields approximately `0.00494` reward with `reward_coef=0.1`, while
+the zero plateau begins at `-1`. The fraction gate prevents a favorable mean
+from hiding a collapsed majority. These are readiness invariants, not a policy-
+quality claim and not thresholds that may be changed after observing the run.
+
+Sentinel failure stops before Step 3 and is classified as
+`expert-support-blocker`, `style-saturation-blocker`, `lifecycle-fail`, or
+`capacity-fail`. It does not authorize coefficient sweeps, discriminator
+regularizer changes, or motion reset.
 
 ## Decision
 
@@ -159,9 +212,16 @@ checkpoint alone is not policy-quality evidence.
 
 ## Current Acceptance Status
 
-Training semantics and ownership are active under `AMP-WALK-TRAIN-v002`.
+Training semantics and ownership are active under `AMP-WALK-TRAIN-v003`.
 Steps 1-6 verify the official spawned async route, typed AMP payload,
 learner-only frozen-`D_k` order, atomic checkpoint/resume, actor-only playback,
 and clean lifecycle. Step 7 measured 96.6% local-MPS end-to-end time overhead;
 that observation remains valid but is accepted as non-blocking under the human
-owner's revised priority. Step 8 bounded policy-quality evidence remains pending.
+owner's revised priority.
+
+The async route and lifecycle evidence from v002 remain accepted. Recovery
+Steps 1-2 are complete. The fresh 20-iteration sentinel passed all three frozen
+tail-five health thresholds with a clean lifecycle, although the policy-logit
+median margin is only about 0.00027 and the final point regressed. Step 3 live
+quality training remains blocked on separate human authorization; no
+policy-quality claim follows from the short sentinel.

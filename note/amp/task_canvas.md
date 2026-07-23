@@ -8,10 +8,12 @@ Concept Figure: `note/architecture/concept/04_amp_walk_async_method.data.json`.
 
 Concept Figure update owner: main Codex session under active contract versioning.
 
-Design Point Register: `contracts/active/method/AMP-WALK-METHOD-v001.md`.
+Design Point Register: `contracts/active/method/AMP-WALK-METHOD-v002.md`.
 
-Current step: Steps 1-7 complete; Step 7 overhead is accepted under
-`AMP-WALK-TRAIN-v002`; stopped before Step 8 bounded live acceptance.
+Current step: original Steps 1-8 executed; Step 8 is
+`runtime-pass / quality-fail`. Recovery Steps 1-2 / 3 are complete. The short
+sentinel passed its frozen non-collapse gate with minimal logit margin. Recovery
+Step 3 is waiting for separate human authorization.
 
 Completed:
 
@@ -43,12 +45,20 @@ Completed:
 - complete Step 7 matched 2048-env MPS A/B plus env-only ablation; persist the
   96.6% overhead observation and locate the primary all-body tracking-sensor
   owner and secondary AMP learner owner. The overhead is diagnostic under v002.
+- complete Step 8 bounded target run and artifact audit. The async route,
+  lifecycle, checkpoint, and sustained fixed-forward locomotion pass; playback
+  quality fails because the discriminator saturates and AMP style contributes
+  about one percent of the final tail mean reward.
+- complete Recovery Step 2 owner repair: remove AMP default-pose authority,
+  expose expert/style health diagnostics, pass 24 focused tests plus the slow
+  MuJoCo boundary test, and complete a fresh 20/20 official async sentinel with
+  clean lifecycle. The tail-five logit gate passes by only about 0.00027.
 
 Active files:
 
 - `note/amp/contracts/README.md`
-- `note/amp/contracts/active/method/AMP-WALK-METHOD-v001.md`
-- `note/amp/contracts/active/training/AMP-WALK-TRAIN-v002.md`
+- `note/amp/contracts/active/method/AMP-WALK-METHOD-v002.md`
+- `note/amp/contracts/active/training/AMP-WALK-TRAIN-v003.md`
 - `note/architecture/concept/04_amp_walk_async_method.data.json`
 - `note/amp/plans/current_engineering_plan.md`
 - `note/amp/checklists/current.md`
@@ -63,9 +73,11 @@ Active files:
 - `note/amp/evidence/2026-07-23-step7-matched-performance.md`
 - `note/amp/evidence/2026-07-23-step7-matched-performance.json`
 - `note/amp/evidence/2026-07-23-performance-gate-acceptance-revision.md`
+- `note/amp/evidence/2026-07-23-step8-runtime-pass-quality-fail.md`
+- `note/amp/evidence/2026-07-23-recovery-step2-style-authority.md`
 
-Active commands: none. No training process is running. Step 8 bounded live
-training remains outside the completed scope.
+Active commands: none. No training process is running. The failed checkpoint is
+evidence/playback-only and is not eligible for recovery resume.
 
 Verified evidence: see `evidence/2026-07-21-static-migration-baseline.md`.
 
@@ -74,12 +86,13 @@ Lifecycle evidence: see
 
 Unresolved risks:
 
-- exact time-to-useful-policy remains unverified until Step 8;
-- MuJoCo currently materializes world and pelvis-relative tracking sensors for
-  every body although AMP consumes only 14 world-frame body states; this is an
-  optional optimization backlog item.
+- only two source forward-walk clips and 935 unique adjacent transitions exist;
+  no additional compatible source support is currently available;
+- the short sentinel is non-collapsed by the frozen mean gate, but its logit
+  margin is minimal and the final point regresses; material-run stability and
+  human-like playback remain unverified;
+- MuJoCo sensor narrowing remains an optional performance backlog item.
 
-Next action, after explicit authorization: run Step 8 bounded fixed-forward AMP
-training with frozen config/data identity, lifecycle postflight, diagnostics,
-checkpoint, and playback. Sensor narrowing and CUDA A/B are optional follow-up
-optimizations.
+Next action: wait for explicit authorization of Recovery Step 3. If authorized,
+freeze one target-GPU command/config/data identity and run from scratch; do not
+resume `model_1850.pt` or the sentinel `model_20.pt`.

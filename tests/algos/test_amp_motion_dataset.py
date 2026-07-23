@@ -28,6 +28,7 @@ def test_manifest_is_explicitly_forward_only() -> None:
         "walk_forward_loop_002__A022",
         "walk_forward_loop_002__A024",
     )
+    assert dataset.num_motions == 2
     assert dataset.num_transitions == (455 - 1) + (482 - 1)
     assert AMP_OBSERVATION_DIM == 195
 

@@ -62,6 +62,8 @@ class G1AMPWalkEnv(G1WalkEnv):
         if cfg.mode_observation or cfg.commands.observe_height_command:
             raise ValueError("G1AMPWalk does not allow mode or height observations")
         scales = getattr(cfg.reward_config, "scales", {}) or {}
+        if float(scales.get("pose", 0.0)) != 0.0:
+            raise ValueError("G1AMPWalk does not allow default-pose reward authority")
         enabled_gait_terms = sorted(
             term for term in _GAIT_PHASE_REWARD_TERMS if float(scales.get(term, 0.0)) != 0.0
         )

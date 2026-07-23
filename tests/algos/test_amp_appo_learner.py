@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 import torch
 from rsl_rl.models import MLPModel
 from tensordict import TensorDict
 
+from unilab.algos.torch.amp import learner as amp_learner
 from unilab.algos.torch.amp.learner import AMPAPPOLearner, AMPDiscriminator
 from unilab.algos.torch.appo.checkpoint import load_appo_checkpoint, save_appo_checkpoint
 
@@ -105,6 +107,32 @@ def test_discriminator_reward_matches_amp_mjlab_formula() -> None:
     torch.testing.assert_close(reward, torch.full((3,), expected))
 
 
+def test_policy_health_metrics_expose_zero_plateau_and_reward_authority() -> None:
+    logits = torch.tensor([-1.2, -1.0, -0.95, 0.0, 1.0])
+    style_reward = 0.1 * torch.clamp(1.0 - 0.25 * torch.square(logits - 1.0), min=0.0)
+    task_reward = torch.full((5,), 0.2)
+
+    metrics = amp_learner.amp_policy_health_metrics(
+        logits=logits,
+        style_reward=style_reward,
+        task_reward=task_reward,
+        task_reward_lerp=0.75,
+        expert_motion_count=2,
+        expert_transition_count=935,
+        expert_draw_count=8,
+    )
+
+    assert metrics["amp/policy_logit_p50"] == pytest.approx(-0.95)
+    assert metrics["amp/policy_zero_style_fraction"] == pytest.approx(0.4)
+    assert metrics["amp/task_weighted_mean"] == pytest.approx(0.15)
+    assert metrics["amp/style_weighted_mean"] == pytest.approx(
+        0.25 * float(style_reward.mean())
+    )
+    assert metrics["amp/expert_motion_count"] == 2.0
+    assert metrics["amp/expert_transition_count"] == 935.0
+    assert metrics["amp/expert_draw_count"] == 8.0
+
+
 def test_frozen_discriminator_reward_enters_vtrace_before_updates() -> None:
     learner = _learner()
     batch = _batch()
@@ -132,6 +160,11 @@ def test_frozen_discriminator_reward_enters_vtrace_before_updates() -> None:
     assert metrics["amp/discriminator_version"] == 1.0
     assert metrics["amp/task_reward_mean"] == torch.mean(task_reward).item()
     assert metrics["amp/combined_reward_mean"] == torch.mean(expected).item()
+    assert metrics["amp/expert_motion_count"] == 2.0
+    assert metrics["amp/expert_transition_count"] == 935.0
+    assert metrics["amp/expert_draw_count"] == 8.0
+    assert 0.0 <= metrics["amp/policy_zero_style_fraction"] <= 1.0
+    assert metrics["amp/task_weighted_mean"] == 0.75 * torch.mean(task_reward).item()
 
 
 def test_amp_learner_checkpoint_roundtrip_is_exact(tmp_path: Path) -> None:

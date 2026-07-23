@@ -1,263 +1,172 @@
-# AMP-WALK Phase 1 Engineering Plan
+# AMP-WALK Phase 1 Style-Authority Recovery Plan
 
-Status: `active`
+Status: `paused before Step 3`
 
-Date: 2026-07-22
+Date: 2026-07-23
 
 Contracts:
 
-- `AMP-WALK-METHOD-v001`
-- `AMP-WALK-TRAIN-v002`
+- `AMP-WALK-METHOD-v002`
+- `AMP-WALK-TRAIN-v003`
 
 Concept Figure:
 
 - `note/architecture/concept/04_amp_walk_async_method.data.json`
 
-Plan cursor: Steps 1-7 complete. Measured Step 7 overhead is accepted under
-`AMP-WALK-TRAIN-v002`; stopped before Step 8 bounded live acceptance.
+Plan cursor: Recovery Step 2 / 3 passed with minimal logit margin. Stop before
+Step 3 material GPU training; Step 3 requires separate human authorization.
 
 ## Terminal Outcome
 
-One fixed-nonzero-forward G1 AMP policy trains through UniLab's official
-asynchronous APPO route, produces an atomically reloadable actor checkpoint,
-exits without process/shared-memory residue, and is evaluated in one bounded
-live run, nominally 20-30 minutes under training contract v002. Standing,
-running, recovery, gait control, Motrix, and
-AMP/distillation integration remain outside Phase 1.
+Produce a fresh-training-ready Phase 1 AMP route in which task reward owns only
+fixed-forward motion and minimum physical viability, AMP exclusively owns
+human-like posture/style, and one 20-iteration official async sentinel proves
+that the style signal is not already collapsed. This plan does not execute the
+material Step 3 GPU quality run.
 
 ## Human Method Map
 
-| design ID | canonical human name | active contract + section | Concept Figure block ID | code/evidence gap |
+| design ID | canonical human name | active contract + section | Concept Figure block ID | current gap |
 | --- | --- | --- | --- | --- |
-| `AMP-WALK-DP-01` | Walk Expert Transitions | `AMP-WALK-METHOD-v001#walk-expert-transitions` | `AW-M-01` | Forward-only manifest, 195-D transform, and sampler implemented |
-| `AMP-WALK-DP-02` | Policy Walk Transitions | `AMP-WALK-METHOD-v001#policy-walk-transitions` | `AW-M-02` | Isolated G1 AMP producer and terminal transition owner implemented |
-| `AMP-WALK-DP-03` | AMP Style Discriminator | `AMP-WALK-METHOD-v001#amp-style-discriminator` | `AW-M-03` | Learner-local D/normalizer/replay/update implemented |
-| `AMP-WALK-DP-04` | AMP-Regularized Walking Policy | `AMP-WALK-METHOD-v001#amp-regularized-walking-policy` | `AW-M-04` | Formal runtime verified; local MPS performance failed with owner verdict; live quality pending |
+| `AMP-WALK-DP-01` | Walk Expert Transitions | `AMP-WALK-METHOD-v002#walk-expert-transitions` | `AW-M-01` | expose two clips/935 unique transitions separately from draws |
+| `AMP-WALK-DP-02` | Policy Walk Transitions | `AMP-WALK-METHOD-v002#policy-walk-transitions` | `AW-M-02` | unchanged, regression only |
+| `AMP-WALK-DP-03` | AMP Style Discriminator | `AMP-WALK-METHOD-v002#amp-style-discriminator` | `AW-M-03` | add quantile/zero-plateau diagnostics and pass sentinel |
+| `AMP-WALK-DP-04` | AMP-Regularized Walking Policy | `AMP-WALK-METHOD-v002#amp-regularized-walking-policy` | `AW-M-04` | retire default-pose task authority and verify V-trace connectivity |
 
 ## Semantic Source Of Truth
 
-| semantic object | active owner | active consumers | legacy/source path | retirement/isolation rule | implementation test | integration test | live gap |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| Phase 1 forward-walk manifest | `amp/motion_dataset.py` plus frozen asset manifest | expert sampler | AMP_mjlab recursive motion loading | two SHA-locked forward clips; non-forward clips fail closed | manifest oracle PASS | formal compose/load | source diversity |
-| 195-D AMP state | `amp/spec.py` plus `G1AMPWalkEnv` | payload, discriminator | AMP_mjlab observation manager | one 13-body order/transform; existing task unchanged | source-frame parity PASS | live env reset/step PASS | sensor cost |
-| policy AMP transition | typed APPO payload plus `resolve_amp_transition_next` | learner replay/scoring | AMP_mjlab runner-local transition | exact final observation; no collector scoring | partial-terminal order PASS | spawned 195-D IPC PASS | termination mix |
-| AMP style reward | `AMPAPPOLearner` | V-trace reward owner, diagnostics | AMP_mjlab discriminator formula | frozen scorer `D_k` per batch | deterministic value/order PASS | reward-to-V-trace PASS | learning scale |
-| combined reward | `AMPAPPOLearner.process_batch` | APPO V-trace/update | current task reward only | task/AMP/final values logged; duplicate apply fails | numeric composition PASS | consumer connectivity PASS | policy quality |
-| checkpoint | generic atomic APPO owner plus AMP learner state | resume, playback/export | direct APPO `torch.save` | CPU-owned atomic save; one startup resume | exact full-state roundtrip PASS | spawned resume and actor-only playback PASS | server filesystem |
-
-There is one active owner per semantic object. Source/legacy routes remain
-references or isolated existing behavior; they do not participate in the AMP
-formal route unless explicitly adapted and covered by the named tests.
-
-## Execution Units And True Boundaries
-
-The eight steps are audit-visible causality units, not eight mandatory user
-approvals. The one-shot deletion test produces four execution boundaries:
-
-1. **Foundation boundary, Step 1:** lifecycle residue or unstable baseline would
-   invalidate all later work.
-2. **Main engineering closure, Steps 2-6:** implement payload, data/env, learner,
-   and formal runtime with embedded local/integration verification in one
-   authorized closure.
-3. **Performance observation boundary, Step 7:** optimization is allowed only
-   after float32 correctness and requires measured A/B evidence. A fixed
-   overhead percentage is not a Phase 1 acceptance gate under training v002.
-4. **Material live boundary, Step 8:** the bounded GPU run has external cost and
-   requires explicit authorization.
-
-Different owner files and test tiers inside Steps 2-6 do not create additional
-approval gates.
+| semantic object | active owner | consumers | legacy path | isolation rule | implementation evidence | live gap |
+| --- | --- | --- | --- | --- | --- | --- |
+| task posture authority | AMP owner YAML | G1 reward owner -> AMP combined reward | inherited `G1WalkFlat` pose scale | AMP `pose` must be absent/zero; legacy task unchanged | composed-config and reward connectivity tests | fresh sentinel |
+| expert support | manifest + `WalkMotionDataset` | learner expert sampler | preload/draw count | report clips=2, unique transitions=935, draws separately | dataset fixture and learner metrics | no extra forward clips exist |
+| style health | `AMPAPPOLearner.process_batch` | diagnostics and readiness evaluator | mean-only metrics | log p10/p50/p90, zero fraction, weighted components | deterministic batch test | tail-five sentinel gate |
+| score/update order | `AMPAPPOLearner` | APPO V-trace/update | none | preserve `D_k -> V-trace -> policy -> D_(k+1)` | existing order/connectivity regression | formal sentinel |
+| recovery identity | runner/config | checkpoint and tracker | `model_1850.pt` | fresh initialization only | no-load effective config and checkpoint identity | Step 3 blocked |
 
 ## Step Map
 
-### Step 1 / 8: Freeze The APPO Baseline And Lifecycle Floor
+### Step 1 / 3: Activate Task/Style Authority
 
-Objective: establish stable throughput ownership and clean process/resource
-lifecycle before introducing AMP state.
+Objective: version the human-confirmed training-signal authority before code.
 
-Scope: unchanged `g1_walk_flat/mujoco` at 2048 environments; normal/failure
-collector close; queue/pipe/shared-memory ownership; CPU-owned atomic APPO
-checkpoint; generic APPO/IPC owner repairs when required.
+Scope: activate method/training contracts, preserve four design/block IDs,
+synchronize Concept Figure, registry, plan, checklist, and canvas.
 
-Non-scope: AMP semantics, AMP reward, distillation code, or policy tuning.
+Non-scope: code, tests, simulator, or training.
 
-Owner files/modules: `scripts/train_appo.py`, `src/unilab/algos/torch/appo/`
-runner/worker, `src/unilab/ipc/async_runner.py`, ring buffer, weight sync,
-checkpoint owner, and focused tests.
+Expected evidence: atlas validator resolves all four design points to active
+contracts; history contracts are excluded from default recall.
 
-Expected evidence: S2-S4 / T-order,T-persist,T-diff,T-performance proving
-bounded child exit, explicit resource closure/unlink, atomic checkpoint reload,
-unchanged APPO behavior, and a reproducible timing baseline.
+Stop condition: `AMP-WALK-METHOD-v002` and `AMP-WALK-TRAIN-v003` are the only
+active AMP contracts and the four-block figure matches them.
 
-Stop condition: baseline and lifecycle report pass with no child/shared-memory
-residue. Any missing cleanup identity or unstable baseline blocks Step 2.
+Status: complete.
 
-### Step 2 / 8: Add Reusable APPO Payload Extension Hooks
+### Step 2 / 3: Engineering And Short-Sentinel Closure
 
-Objective: allow algorithm-owned rollout fields without copying the APPO runner
-or lifecycle protocol.
+Objective: make AMP style measurable before any material training run.
 
-Scope: typed extra ring fields/dtypes, collector payload hook, staging support,
-attached-child cleanup, and complete memory-budget accounting.
+Scope:
 
-Non-scope: AMP feature meaning, reward, or discriminator.
+- set AMP task default-joint `pose` reward to zero without modifying
+  `G1WalkFlat`;
+- expose expert support and sampling identities;
+- expose frozen-scoring-batch policy logit quantiles, zero-style fraction, and
+  weighted task/style reward contributions;
+- add failing-first deterministic tests, focused regressions, composed config
+  verification, and one fresh 20-iteration official async sentinel;
+- inspect the sentinel event/log/lifecycle identity and persist evidence;
+- synchronize checklist, canvas, contracts, and Architecture current state.
 
-Owner files/modules: rollout ring buffer, APPO runner/worker/staging, memory
-budget, and fake spawned-payload tests.
+Non-scope: motion reset, motion-reset curriculum, new motion generation,
+discriminator sweeps, checkpoint resume, long GPU training, standing, running,
+recovery, gait control, Motrix, or distillation.
 
-Expected evidence: S1-S3 / T-shape,T-connect,T-order,T-diff; a fake 195-D
-current/next payload crosses collector -> ring -> staging -> learner while
-default APPO/HORA field behavior stays unchanged.
+Owner files/modules:
 
-Stop condition: optional payload survives spawned IPC with exact shape/order and
-no copied runner branch.
+- `conf/appo/task/g1_amp_walk/mujoco.yaml`: task reward identity;
+- `src/unilab/algos/torch/amp/motion_dataset.py`: support identity;
+- `src/unilab/algos/torch/amp/learner.py`: scoring-batch diagnostics;
+- AMP dataset/learner/runtime tests: deterministic and connector evidence;
+- formal `uv run train --algo appo --task g1_amp_walk --sim mujoco`: live sentinel.
 
-### Step 3 / 8: Establish Walk Expert And AMP-State Owners
+Core parameter path:
 
-Objective: implement one forward-only expert distribution and one canonical
-195-D AMP feature transform.
+```text
+AMP owner YAML pose=0
+-> G1 reward component map
+-> task reward batch
+-> frozen D_k policy transition score
+-> style reward and zero plateau
+-> weighted combined reward
+-> V-trace/APPO update
+-> TensorBoard diagnostics
+```
 
-Scope: fail-closed manifest, 13-body ordering, deterministic transition
-sampling, vectorized cold-path conversion, normalizer input, and AMP_mjlab
-feature parity.
+Test classes:
 
-Non-scope: policy rollout, task reward, or learning.
+- core param path: reward/style metrics and combined-reward consumer;
+- secondary contract path: Hydra config and expert support identity;
+- live sentinel path: real MuJoCo collector/IPC/learner/lifecycle.
 
-Owner files/modules: planned `src/unilab/algos/torch/amp/spec.py`,
-`motion_dataset.py`, motion manifest/assets, and rotation helpers.
+Commands:
 
-Expected evidence: S0-S1 / T-oracle,T-shape,T-value,T-diff; non-forward clips
-cannot enter and sampled 195-D/195-D transitions match AMP_mjlab within tolerance.
+```bash
+uv run pytest -q tests/algos/test_amp_motion_dataset.py \
+  tests/algos/test_amp_appo_learner.py \
+  tests/algos/test_amp_appo_runtime.py \
+  tests/envs/locomotion/g1/test_amp_walk.py
 
-Stop condition: deterministic expert transition sampling and manifest identity
-are reproducible.
+uv run train --algo appo --task g1_amp_walk --sim mujoco \
+  training.device=mps training.collector_device=mps training.no_play=true \
+  algo.num_envs=2048 algo.steps_per_env=24 algo.max_iterations=20 \
+  algo.save_interval=0 algo.load_run=null \
+  training.log_dir=/private/tmp/unilab_amp_recovery_step2_sentinel
+```
 
-### Step 4 / 8: Add AMP-Only G1 Environment Contract
+Expected result: focused tests pass; fresh sentinel completes 20/20 with clean
+lifecycle and final-five means satisfying the v003 style-health gate.
 
-Objective: emit exact policy AMP transitions without gait or standing ownership.
+Stop condition: classify Step 2 as `pass`, `expert-support-blocker`,
+`style-saturation-blocker`, `lifecycle-fail`, or `capacity-fail`. On any failure,
+do not enter Step 3 and do not tune another mechanism in the same run.
 
-Scope: isolated AMP task/config, init-time tracked-body setup, cached body IDs,
-`amp` observation group, exact terminal/final AMP state, partial reset, fixed
-nonzero forward objective, and no gait-phase input/reward.
+Status: complete as `pass`. The formal MPS run completed 20/20 with clean
+lifecycle. All three frozen final-five gates passed, but policy-logit median
+cleared its threshold by only about 0.00027 and the final point regressed. See
+`evidence/2026-07-23-recovery-step2-style-authority.md`.
 
-Non-scope: mutation of existing `G1WalkFlat`, Motrix, recovery, or motion reset.
+### Step 3 / 3: Fresh Bounded GPU Quality Acceptance
 
-Owner files/modules: G1 locomotion environment adapter, declared backend calls,
-new AMP owner YAML, registry, and env contract tests.
+Objective: train and judge human-like fixed-forward AMP walking.
 
-Expected evidence: S1-S2 / T-shape,T-order,T-diff,T-connect for actor/critic/AMP
-groups, full rollout, done rows, subset reset, and legacy-task isolation.
+Scope: one fresh frozen target-GPU run, lifecycle postflight, artifacts,
+actor-only playback, and physical-quality judgment.
 
-Stop condition: exact current/next/terminal AMP transitions are correct and the
-existing G1 task is unchanged.
+Non-scope: resume from `model_1850.pt`, repeated tuning, expanded locomotion,
+or Phase 2 distillation.
 
-### Step 5 / 8: Implement AMP APPO Learner
+Expected evidence: frozen commit/config/data identity, TensorBoard curves,
+checkpoint hash, lifecycle report, and human-like walking playback.
 
-Objective: make learner-only AMP reward and discriminator training first-class
-owners.
+Stop condition: one terminal quality/lifecycle classification.
 
-Scope: discriminator, normalizer, policy replay, expert sampling, frozen `D_k`
-scoring, combined reward, discriminator optimizer/version, and learner state.
-
-Non-scope: collector-side discriminator, deployment AMP, or in-loop checkpoint
-reload.
-
-Owner files/modules: planned AMP discriminator/replay/APPO learner modules and
-deterministic learner tests.
-
-Expected evidence: S1-S2 / T-value,T-order,T-connect,T-persist proving exact
-formula, one score/version per batch, reward-to-V-trace connectivity,
-actor/critic-before-discriminator ordering, and state roundtrip.
-
-Stop condition: a fake async batch changes V-trace through AMP reward and
-advances exactly one discriminator version after the policy update.
-
-### Step 6 / 8: Connect The Formal Async Runtime
-
-Objective: compose the AMP task, payload, and learner through the existing APPO
-entrypoint and runtime resolver.
-
-Scope: runtime bundle, Hydra task/config, formal spawned route, checkpoint/
-logging, normal/failure lifecycle report, resume, and actor-only playback.
-
-Non-scope: second training script, copied synchronization protocol,
-distillation integration, or policy-quality tuning.
-
-Owner files/modules: planned AMP APPO runtime adapters, generic APPO resolver,
-`scripts/train_appo.py` assembly only, config/registry, and spawned integration
-tests.
-
-Expected evidence: S2-S3 / T-connect,T-order,T-persist,T-diff; a formal
-two-iteration run produces finite AMP/APPO metrics, atomically reloadable state,
-clean injected-failure shutdown, and actor-only playback.
-
-Stop condition: the official command completes/resumes/plays without resource
-residue and without touching legacy G1 or distillation paths.
-
-### Step 7 / 8: Measure And Optimize The AMP Async Path
-
-Objective: bound AMP overhead against the Step 1 baseline.
-
-Scope: matched timing, queue/staging occupancy, memory/RSS/VRAM, discriminator
-cost, and only then optional float16 transport or payload compaction.
-
-Non-scope: reward/method tuning used to hide a throughput defect.
-
-Owner files/modules: AMP runtime metrics, IPC dtype extension when justified,
-benchmark command, and performance evidence ledger.
-
-Expected evidence: S3-S4 / T-performance,T-diff with one matched APPO-versus-AMP
-A/B artifact.
-
-Stop condition: matched overhead and owner-level bottlenecks are persisted;
-forward progress, bounded completion, memory capacity, and lifecycle remain
-valid. Overhead alone does not block Phase 1.
-
-Observed result: the matched local MPS identity has 96.6% reconstructed
-end-to-end time overhead. The primary owner is the
-over-broad MuJoCo all-body/world-and-base tracking sensor route; the secondary
-owner is AMP learner work. See
-`evidence/2026-07-23-step7-matched-performance.md`. The stop condition is met by
-the persisted observation and three clean completed runs. Under
-`AMP-WALK-TRAIN-v002`, the human owner accepts this extra training time and the
-result does not block Step 8.
-
-### Step 8 / 8: Bounded Live Acceptance
-
-Objective: test the wall-clock and fixed-forward walking hypothesis.
-
-Scope: one frozen command/config/data/checkpoint identity, nominally 20-30
-minutes of training, postflight lifecycle check, diagnostics, and playback.
-
-Non-scope: standing, stopping, running, recovery, gait control, indefinite
-tuning, Motrix, or Phase 2 distillation.
-
-Owner files/modules: formal launch/postflight owner, experiment tracker,
-playback route, and AMP evidence ledger.
-
-Expected evidence: S4 / T-live,T-performance containing wall time, env steps,
-checkpoint hash, task/AMP/combined reward, logits/loss/version curves,
-termination rate, lifecycle report, and playback.
-
-Stop condition: classify the result as runtime-pass/quality-pass,
-runtime-pass/quality-fail, lifecycle-fail, or capacity-fail. Extra bounded
-training time alone is not failure. Do not infer a useful policy from a clean
-process or finite checkpoint alone.
+Status: blocked on separate human authorization. Step 2 passed; this execution
+stopped before starting Step 3.
 
 ## Conditional Escalation
 
-- Formal route not reached or owner forwarding contradicts the contract:
-  activate only the smallest relevant formal-runtime audit.
-- Formal route runs but policy is no-op or poor: activate policy-quality audit
-  after preserving the run identity.
-- Moving impossible-object/native symptoms recur: stop business-logic patching
-  and return to the native/lifecycle campaign.
-- A new behavior objective or AMP/distillation interaction is requested: stop
-  Phase 1 and create a new contract proposal/version.
+- The source repository has only two compatible forward-walk clips. No extra
+  support may be invented or inferred from non-forward filenames.
+- Source AMP uses motion-frame reset, but v002 forbids it. If the sentinel
+  saturates, return this no-RSI boundary to the human owner instead of silently
+  adding motion reset.
+- Healthy AMP diagnostics with non-human playback would reopen the 195-D style
+  representation, not task reward coefficients.
+- Native/lifecycle anomalies return to the existing native owner-boundary
+  campaign without changing AMP semantics.
 
-## Current Authority Boundary
+## Authority Boundary
 
-Steps 1-7 are complete under their accepted contracts. Step 8 simulator startup,
-bounded training, and policy-quality acceptance remain unauthorized until the
-user explicitly continues. Performance redesign and CUDA A/B are optional
-optimization work, not prerequisites for Step 8.
+Recovery Steps 1-2 are authorized in one closure. Step 3 is a material remote
+GPU training boundary and remains unauthorized.

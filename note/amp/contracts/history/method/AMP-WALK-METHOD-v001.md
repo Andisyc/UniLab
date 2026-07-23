@@ -1,9 +1,10 @@
 ---
 contract_id: AMP-WALK-METHOD-v001
-status: active
+status: superseded
 effective_date: 2026-07-22
-updated_date: 2026-07-22
+updated_date: 2026-07-23
 supersedes: null
+superseded_by: AMP-WALK-METHOD-v002
 scope: Phase 1 fixed-forward walk-only AMP on MuJoCo G1
 concept_figure: note/architecture/concept/04_amp_walk_async_method.data.json
 ---
@@ -175,9 +176,15 @@ contract, the distillation contracts, or the Phase 1 runtime.
 
 ## Current Acceptance Status
 
-Method semantics are active and human-confirmed. Steps 1-6 implementation and
-formal async integration are accepted by the current checklist. Step 7 produced
-a matched local-MPS overhead measurement and owner-level bottleneck verdict
-without changing method semantics. `AMP-WALK-TRAIN-v002` accepts the additional
-training time as non-blocking. Bounded live-policy quality remains pending in
-Step 8.
+Method semantics are active and human-confirmed. Steps 1-7 implementation,
+formal async integration, and performance observation are accepted by the
+current checklist. Step 8 completed as `runtime-pass / quality-fail`: the
+policy learned sustained fixed-forward locomotion, but the discriminator
+saturated and AMP style contributed about one percent of the final tail mean
+reward. See
+`../../../evidence/2026-07-23-step8-runtime-pass-quality-fail.md`.
+
+The active contract remains the source of truth until the human owner resolves
+the proposed task/style authority change in
+`../../../plans/phase1_style_authority_recovery_proposal.md`. No proposed
+semantic change is active yet.

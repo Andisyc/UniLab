@@ -53,7 +53,6 @@ reward:
     base_height: -500.0
     orientation: -5.0
     action_rate: -0.01
-    pose: -0.1
     alive: 1.0
   tracking_sigma: 0.25
   gait_frequency: 1.5
@@ -62,4 +61,3 @@ reward:
   base_height_target: 0.754
   min_base_height: 0.55
   max_tilt_deg: 25.0
-  pose_weights: [0.01, 1.0, 5.0, 0.01, 5.0, 5.0, 0.01, 1.0, 5.0, 0.01, 5.0, 5.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0]

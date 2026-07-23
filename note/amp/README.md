@@ -1,7 +1,7 @@
 # AMP-Only Async Walking Control Room
 
-Status: `Steps 1-7 complete`; measured AMP overhead is accepted under training
-contract v002 and Step 8 awaits explicit authorization.
+Status: `Recovery Step 2 / 3 passed`; style-authority repair and short-sentinel
+evidence are complete. Step 3 waits for separate human authorization.
 
 This directory governs the proposed migration of walk-only AMP training from
 `/Users/chengyuxuan/ArtiIntComVis/AMP_mjlab` into UniLab's asynchronous APPO
@@ -34,6 +34,9 @@ role or a hidden extension of the active multi-teacher method.
 5. [Static migration evidence](evidence/2026-07-21-static-migration-baseline.md)
 6. [Distillation lifecycle impact review](evidence/2026-07-22-distill-lifecycle-impact-review.md)
 7. [Current task canvas](task_canvas.md)
+8. [Step 8 quality-failure evidence](evidence/2026-07-23-step8-runtime-pass-quality-fail.md)
+9. [Recovery Step 2 evidence](evidence/2026-07-23-recovery-step2-style-authority.md)
+10. [Current recovery engineering plan](plans/current_engineering_plan.md)
 
 ## Governance State
 
@@ -42,10 +45,14 @@ Concept Figure. It remains separate from the active multi-teacher distillation
 method. Planned implementation owners stay in the engineering plan until code
 exists; no AMP Method-to-Code or Runtime Atlas is presented as implemented.
 
-The current cursor is Step 1 / 8, pending explicit implementation authority.
-The accepted document activation does not authorize code changes, tests,
-simulator startup, checkpoint IO, or training.
+The original eight-step migration plan reached Step 8 and closed as
+`runtime-pass / quality-fail`. The async runtime, lifecycle, checkpoint, and
+fixed-forward locomotion routes passed; human-like AMP style did not. Recovery
+Step 1 activated `AMP-WALK-METHOD-v002` and `AMP-WALK-TRAIN-v003`. Recovery
+Step 2 removed default-pose authority, added support/style diagnostics, and
+passed a fresh 20-iteration official async sentinel with a clean lifecycle. The
+frozen tail-five logit threshold passed by only about 0.00027, so this is not a
+policy-quality claim. Step 3 material GPU training is not authorized.
 
-No speedup or policy-quality claim is active. Step 8 will test useful walking
-within one bounded run; a roughly ten-minute increase over the original
-10-20-minute estimate is explicitly acceptable.
+No policy-quality claim is active. `model_1850.pt` is retained as failed-run
+evidence/playback identity and must not seed the proposed recovery run.

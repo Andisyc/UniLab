@@ -69,6 +69,14 @@ def test_amp_walk_cfg_is_fixed_nonzero_forward_without_standing() -> None:
     assert cfg.add_body_sensors is True
 
 
+def test_amp_walk_rejects_default_pose_reward_authority() -> None:
+    cfg = G1AMPWalkCfg()
+    cfg.reward_config = SimpleNamespace(scales={"pose": -0.1})
+
+    with pytest.raises(ValueError, match="default-pose reward"):
+        G1AMPWalkEnv._validate_phase1_cfg(cfg)
+
+
 def test_amp_walk_observation_contract_has_no_gait_phase_authority() -> None:
     env = _unit_env()
     common = {

@@ -16,17 +16,17 @@
     {
       "id": "AW-M-01",
       "design_id": "AMP-WALK-DP-01",
-      "contract_id": "AMP-WALK-METHOD-v001",
+      "contract_id": "AMP-WALK-METHOD-v002",
       "contract_anchor": "walk-expert-transitions",
       "title": "Walk Expert Transitions",
-      "summary": "仅以前进行走动作序列定义人类步态正样本",
+      "summary": "显式前进行走 clips 定义正样本, 唯一支持与重复采样分开记录",
       "concept": "C-AW-EXPERT",
       "x": 60, "y": 100, "w": 260, "h": 110
     },
     {
       "id": "AW-M-02",
       "design_id": "AMP-WALK-DP-02",
-      "contract_id": "AMP-WALK-METHOD-v001",
+      "contract_id": "AMP-WALK-METHOD-v002",
       "contract_anchor": "policy-walk-transitions",
       "title": "Policy Walk Transitions",
       "summary": "异步采样策略生成的当前与下一身体状态",
@@ -36,20 +36,20 @@
     {
       "id": "AW-M-03",
       "design_id": "AMP-WALK-DP-03",
-      "contract_id": "AMP-WALK-METHOD-v001",
+      "contract_id": "AMP-WALK-METHOD-v002",
       "contract_anchor": "amp-style-discriminator",
       "title": "AMP Style Discriminator",
-      "summary": "冻结的 D_k 比较专家与策略 transition 并产生风格奖励",
+      "summary": "冻结的 D_k 产生风格奖励, 短 sentinel 必须排除零奖励塌缩",
       "concept": "C-AW-STYLE",
       "x": 530, "y": 250, "w": 280, "h": 120
     },
     {
       "id": "AW-M-04",
       "design_id": "AMP-WALK-DP-04",
-      "contract_id": "AMP-WALK-METHOD-v001",
+      "contract_id": "AMP-WALK-METHOD-v002",
       "contract_anchor": "amp-regularized-walking-policy",
       "title": "AMP-Regularized Walking Policy",
-      "summary": "固定前进任务信号与 AMP 奖励共同进入 V-trace",
+      "summary": "task 只管前进与生存, AMP 独占类人姿态并共同进入 V-trace",
       "concept": "C-AW-LEARN",
       "x": 990, "y": 250, "w": 290, "h": 120
     }
@@ -86,4 +86,3 @@
   "callouts": [],
   "acceptance": []
 }
-
