@@ -206,9 +206,7 @@ class APPORunner(AsyncRunner):
     def _learner_extra_kwargs(self) -> dict[str, Any]:
         return {}
 
-    def _restore_learner_checkpoint(
-        self, learner: APPOLearner, checkpoint: dict[str, Any]
-    ) -> None:
+    def _restore_learner_checkpoint(self, learner: APPOLearner, checkpoint: dict[str, Any]) -> None:
         learner.actor.load_state_dict(checkpoint["actor"])
         learner.critic.load_state_dict(checkpoint["critic"])
         if "optimizer" in checkpoint:

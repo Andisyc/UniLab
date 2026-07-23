@@ -87,7 +87,7 @@ def supervisor_source(root: Path, run_dir: Path) -> str:
     log = root / "hp7c3_bounded_persistent_r1.log"
     timing = root / "hp7c3_bounded_persistent_r1.time"
     gpu_csv = root / "hp7c3_bounded_persistent_r1.nvidia.csv"
-    return f'''#!/usr/bin/env bash
+    return f"""#!/usr/bin/env bash
 set -euo pipefail
 cd {root}
 test ! -e {run_dir}
@@ -112,11 +112,11 @@ uv run --no-sync train --algo distill --task g1_walk_flat --sim mujoco \\
   training.workflow.dagger_iterations=1 \\
   training.workflow.dagger_batch_size=512 \\
   training.workflow.dagger_updates_per_iteration=512 > {log} 2>&1
-'''
+"""
 
 
 def oracle_source() -> str:
-    return '''#!/usr/bin/env python3
+    return """#!/usr/bin/env python3
 from __future__ import annotations
 
 import argparse
@@ -296,7 +296,7 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-'''
+"""
 
 
 def materialize(root: Path) -> dict[str, Any]:
@@ -424,9 +424,19 @@ def materialize(root: Path) -> dict[str, Any]:
         "UV_PROJECT_ENVIRONMENT": os.environ.get("UV_PROJECT_ENVIRONMENT"),
     }
     command_argv = [
-        "uv", "run", "--no-sync", "train", "--algo", "distill",
-        "--task", "g1_walk_flat", "--sim", "mujoco",
-        "workflow=g1_walk_stand", "algo.seed=0", "training.device=cuda:0",
+        "uv",
+        "run",
+        "--no-sync",
+        "train",
+        "--algo",
+        "distill",
+        "--task",
+        "g1_walk_flat",
+        "--sim",
+        "mujoco",
+        "workflow=g1_walk_stand",
+        "algo.seed=0",
+        "training.device=cuda:0",
         "training.workflow.mode=fork",
         f"training.workflow.parent_run_dir={parent}",
         f"training.workflow.run_dir={run_dir}",
@@ -463,11 +473,16 @@ def materialize(root: Path) -> dict[str, Any]:
             "runtime_scope": list(RUNTIME_SCOPE),
             "source_identity": source_identity,
         },
-        "compose": {**compose_identity, "stderr_empty": compose_stderr.is_file() and not compose_stderr.stat().st_size},
+        "compose": {
+            **compose_identity,
+            "stderr_empty": compose_stderr.is_file() and not compose_stderr.stat().st_size,
+        },
         "parent": {
             "run_dir": str(parent),
             "manifest_path": str(parent_manifest_path),
-            "manifest_sha256": file_sha256(parent_manifest_path) if parent_manifest_path.is_file() else None,
+            "manifest_sha256": file_sha256(parent_manifest_path)
+            if parent_manifest_path.is_file()
+            else None,
             "latest_iteration": latest.get("iteration"),
             "aggregate_num_samples": latest.get("aggregate_num_samples"),
         },
@@ -492,7 +507,11 @@ def materialize(root: Path) -> dict[str, Any]:
             "effective_updates": EXPECTED_UPDATES,
             "outer_iterations": 1,
         },
-        "gpu_query": {"returncode": gpu.returncode, "stdout": gpu.stdout.strip(), "stderr": gpu.stderr.strip()},
+        "gpu_query": {
+            "returncode": gpu.returncode,
+            "stdout": gpu.stdout.strip(),
+            "stderr": gpu.stderr.strip(),
+        },
         "dependency_identity": dependency_identity,
         "command": {"argv": command_argv, "env": command_env},
         "supervisor": {
@@ -521,8 +540,16 @@ def materialize(root: Path) -> dict[str, Any]:
     )
     result = subprocess.run(
         [
-            "uv", "run", "--no-sync", "python", str(oracle_path),
-            "--preflight", "--freeze", str(freeze_path), "--result", str(preflight_path),
+            "uv",
+            "run",
+            "--no-sync",
+            "python",
+            str(oracle_path),
+            "--preflight",
+            "--freeze",
+            str(freeze_path),
+            "--result",
+            str(preflight_path),
         ],
         cwd=root,
         check=False,

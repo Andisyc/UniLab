@@ -76,17 +76,11 @@ def _safe_runtime_repr(value: Any) -> str:
     try:
         return _ORIGINAL_REPR(value)
     except BaseException as error:  # pragma: no cover - defensive runtime probe
-        return (
-            "<repr-error "
-            f"type={_ORIGINAL_TYPE(error).__name__} "
-            f"repr={_ORIGINAL_REPR(error)}>"
-        )
+        return f"<repr-error type={_ORIGINAL_TYPE(error).__name__} repr={_ORIGINAL_REPR(error)}>"
 
 
 def _target_index_list_runtime_snapshot(target_indices: list[int]) -> dict[str, Any]:
-    element_type_counts = Counter(
-        _ORIGINAL_TYPE(value).__name__ for value in target_indices
-    )
+    element_type_counts = Counter(_ORIGINAL_TYPE(value).__name__ for value in target_indices)
     invalid_head = [
         {
             "index": index,
@@ -605,9 +599,7 @@ class BehaviorDistillationTrainer:
                 label_key=role_key,
                 row_index=row_index,
                 update_number=update_number,
-                trace_row=(
-                    trace_update and (row_index < 2 or row_index == len(role_labels) - 1)
-                ),
+                trace_row=(trace_update and (row_index < 2 or row_index == len(role_labels) - 1)),
             )
         targets = torch.tensor(target_indices, dtype=torch.long, device=router_logits.device)
         if trace_update:
@@ -674,8 +666,7 @@ class BehaviorDistillationTrainer:
                 row_index=row_index,
                 update_number=update_number,
                 trace_row=(
-                    trace_update
-                    and (row_index < 2 or row_index == len(command_intents) - 1)
+                    trace_update and (row_index < 2 or row_index == len(command_intents) - 1)
                 ),
             )
         targets = torch.tensor(target_indices, dtype=torch.long, device=router_logits.device)

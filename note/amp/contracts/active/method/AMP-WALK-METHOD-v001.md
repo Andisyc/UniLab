@@ -177,5 +177,7 @@ contract, the distillation contracts, or the Phase 1 runtime.
 
 Method semantics are active and human-confirmed. Steps 1-6 implementation and
 formal async integration are accepted by the current checklist. Step 7 produced
-a matched local-MPS `performance-fail` and owner-level bottleneck verdict without
-changing method semantics. Bounded live-policy quality remains pending in Step 8.
+a matched local-MPS overhead measurement and owner-level bottleneck verdict
+without changing method semantics. `AMP-WALK-TRAIN-v002` accepts the additional
+training time as non-blocking. Bounded live-policy quality remains pending in
+Step 8.

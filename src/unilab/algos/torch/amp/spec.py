@@ -38,9 +38,7 @@ def _validate_body_state(name: str, value: np.ndarray, width: int) -> np.ndarray
     if array.ndim != 3 or array.shape[-1] != width:
         raise ValueError(f"{name} must have shape [batch, body, {width}], got {array.shape}")
     if array.shape[1] <= max(max(AMP_BODY_INDICES), AMP_ANCHOR_BODY_INDEX):
-        raise ValueError(
-            f"{name} must contain at least 30 ordered G1 bodies, got {array.shape[1]}"
-        )
+        raise ValueError(f"{name} must contain at least 30 ordered G1 bodies, got {array.shape[1]}")
     if not np.isfinite(array).all():
         raise ValueError(f"{name} contains non-finite values")
     return array
@@ -118,7 +116,9 @@ def build_amp_observation_from_selected(
     anchor_pos_w = np.asarray(anchor_pos_w)
     anchor_quat_w = np.asarray(anchor_quat_w)
     if anchor_pos_w.shape != (batch_size, 3):
-        raise ValueError(f"anchor_pos_w must have shape [{batch_size}, 3], got {anchor_pos_w.shape}")
+        raise ValueError(
+            f"anchor_pos_w must have shape [{batch_size}, 3], got {anchor_pos_w.shape}"
+        )
     if anchor_quat_w.shape != (batch_size, 4):
         raise ValueError(
             f"anchor_quat_w must have shape [{batch_size}, 4], got {anchor_quat_w.shape}"

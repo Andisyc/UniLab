@@ -185,16 +185,10 @@ def test_connector_resolves_auto_output_identity_from_run_name(tmp_path: Path) -
     )
 
     assert loaded.identity.run_dir == (
-        tmp_path
-        / "logs"
-        / "distill_workflow"
-        / "20260720-090807_g1_walk_stand_fresh_oom_r2"
+        tmp_path / "logs" / "distill_workflow" / "20260720-090807_g1_walk_stand_fresh_oom_r2"
     )
     assert loaded.identity.artifact_dir == (
-        tmp_path
-        / "logs"
-        / "distill_role_artifacts"
-        / "20260720-090807_g1_walk_stand_fresh_oom_r2"
+        tmp_path / "logs" / "distill_role_artifacts" / "20260720-090807_g1_walk_stand_fresh_oom_r2"
     )
 
 
@@ -274,9 +268,7 @@ def test_connector_materializes_auto_output_identity_once_and_reports_paths(
 
     expected_stem = "20260720-090807_g1_walk_stand_fresh_oom_r2"
     assert result["run_dir"] == str(root / "logs" / "distill_workflow" / expected_stem)
-    assert result["artifact_dir"] == str(
-        root / "logs" / "distill_role_artifacts" / expected_stem
-    )
+    assert result["artifact_dir"] == str(root / "logs" / "distill_role_artifacts" / expected_stem)
     assert not Path(result["run_dir"]).exists()
     assert not Path(result["artifact_dir"]).exists()
     assert result["auto_output_identity"] == {

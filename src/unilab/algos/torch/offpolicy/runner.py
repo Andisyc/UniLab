@@ -601,12 +601,12 @@ class OffPolicyRunner(AsyncRunner):
         self.last_run_summary = summary
         self._active_logger = None
 
-    def close(self) -> None:
+    def close(self) -> dict[str, Any]:
         active_logger = getattr(self, "_active_logger", None)
         if active_logger is not None:
             active_logger.close()
             self._active_logger = None
-        super().close()
+        return super().close()
 
     # _check_collector_alive() inherited from AsyncRunner base class
 

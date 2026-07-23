@@ -356,8 +356,10 @@ def run_stage(
     result_queue.close()
     exitcodes = [process.exitcode for process in processes]
     status = "completed"
-    if timed_out or any(code != 0 for code in exitcodes) or any(
-        result.get("status") != "completed" for result in results
+    if (
+        timed_out
+        or any(code != 0 for code in exitcodes)
+        or any(result.get("status") != "completed" for result in results)
     ):
         status = "failed"
     if len(results) != workers:

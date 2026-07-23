@@ -45,6 +45,10 @@ class AMPDiscriminator(nn.Module):
 
 
 class AMPRunningNormalizer(nn.Module):
+    mean: torch.Tensor
+    variance: torch.Tensor
+    count: torch.Tensor
+
     def __init__(self, width: int, *, epsilon: float = 1e-4, clip: float = 10.0) -> None:
         super().__init__()
         self.epsilon = float(epsilon)
@@ -99,7 +103,9 @@ class AMPReplayBuffer:
         states = states.detach().reshape(-1, self.width).to(self.device)
         next_states = next_states.detach().reshape(-1, self.width).to(self.device)
         if states.shape != next_states.shape:
-            raise ValueError(f"AMP replay transition shape mismatch: {states.shape} vs {next_states.shape}")
+            raise ValueError(
+                f"AMP replay transition shape mismatch: {states.shape} vs {next_states.shape}"
+            )
         if states.shape[0] >= self.capacity:
             self.states.copy_(states[-self.capacity :])
             self.next_states.copy_(next_states[-self.capacity :])
@@ -188,9 +194,7 @@ class AMPAPPOLearner(APPOLearner):
             lr=amp_discriminator_learning_rate,
         )
         self.amp_normalizer = AMPRunningNormalizer(AMP_OBSERVATION_DIM).to(device)
-        self.amp_replay = AMPReplayBuffer(
-            amp_replay_capacity, AMP_OBSERVATION_DIM, device=device
-        )
+        self.amp_replay = AMPReplayBuffer(amp_replay_capacity, AMP_OBSERVATION_DIM, device=device)
         expert = WalkMotionDataset.from_manifest(amp_motion_manifest)
         self._expert_current = torch.from_numpy(expert.current_transitions).to(device)
         self._expert_next = torch.from_numpy(expert.next_transitions).to(device)
@@ -217,8 +221,7 @@ class AMPAPPOLearner(APPOLearner):
             batch_dict["amp_state"], batch_dict["amp_next_state"]
         )
         combined = (
-            self.amp_task_reward_lerp * task_reward
-            + (1.0 - self.amp_task_reward_lerp) * amp_reward
+            self.amp_task_reward_lerp * task_reward + (1.0 - self.amp_task_reward_lerp) * amp_reward
         )
         batch_dict["_amp_task_rewards"] = task_reward
         batch_dict["_amp_style_rewards"] = amp_reward
@@ -267,9 +270,7 @@ class AMPAPPOLearner(APPOLearner):
         normalizer_expert: torch.Tensor | None = None
         for _ in range(self.amp_discriminator_updates):
             count = self.amp_discriminator_batch_size
-            policy_state, policy_next = self.amp_replay.sample(
-                count, generator=self.amp_generator
-            )
+            policy_state, policy_next = self.amp_replay.sample(count, generator=self.amp_generator)
             expert_state, expert_next = self._sample_expert(count)
             with torch.no_grad():
                 normalized_policy_state = self.amp_normalizer.normalize(policy_state)

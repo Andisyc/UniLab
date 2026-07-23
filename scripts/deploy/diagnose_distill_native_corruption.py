@@ -60,7 +60,7 @@ _NATIVE_SYMPTOM_MARKERS = (
     "Segmentation fault",
     "SIGABRT",
     "'cell' object is not callable",
-    '"<class \'frame\'>"',
+    "\"<class 'frame'>\"",
     "<class 'frame'>",
 )
 
@@ -373,7 +373,14 @@ def _lifecycle_command(
     source_manifest: Path | None,
     cycles: int,
 ) -> tuple[str, ...]:
-    command = [*runtime, str(lifecycle_script), "--work-dir", str(stage_data_dir), "--cycles", str(cycles)]
+    command = [
+        *runtime,
+        str(lifecycle_script),
+        "--work-dir",
+        str(stage_data_dir),
+        "--cycles",
+        str(cycles),
+    ]
     if dataset_path is not None:
         command.extend(("--dataset", str(dataset_path)))
     else:
@@ -530,7 +537,9 @@ def _offline_replay_command(
     )
 
 
-def _build_gpu_stages(args: argparse.Namespace, uv_executable: str) -> tuple[list[StageSpec], list[dict[str, Any]]]:
+def _build_gpu_stages(
+    args: argparse.Namespace, uv_executable: str
+) -> tuple[list[StageSpec], list[dict[str, Any]]]:
     if args.offline_init_checkpoint is None or args.teacher_checkpoint is None:
         return [], [
             {
@@ -724,7 +733,8 @@ def classify_campaign(stages: Sequence[Mapping[str, Any]]) -> str:
     failed_methods = {
         str(stage.get("method"))
         for stage in stages
-        if stage.get("status") == "failed" or stage.get("evidence_level") == "native-symptom-confirmed"
+        if stage.get("status") == "failed"
+        or stage.get("evidence_level") == "native-symptom-confirmed"
     }
     completed_methods = {
         str(stage.get("method")) for stage in stages if stage.get("status") == "completed"
@@ -970,9 +980,7 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--monitor-interval-seconds", type=float, default=1.0)
     parser.add_argument("--valgrind", choices=("auto", "on", "off"), default="auto")
     parser.add_argument("--rr", choices=("auto", "on", "off"), default="auto")
-    parser.add_argument(
-        "--compute-sanitizer", choices=("auto", "on", "off"), default="auto"
-    )
+    parser.add_argument("--compute-sanitizer", choices=("auto", "on", "off"), default="auto")
     parser.add_argument("--offline-dataset", type=Path)
     parser.add_argument("--offline-init-checkpoint", type=Path)
     parser.add_argument("--teacher-checkpoint", type=Path)
@@ -1014,9 +1022,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         args.walk_dataset,
         args.stand_dataset,
     )
-    paths.extend(
-        path.resolve() for path in optional_inputs if path is not None and path.is_file()
-    )
+    paths.extend(path.resolve() for path in optional_inputs if path is not None and path.is_file())
     paths = list(dict.fromkeys(paths))
     preflight = collect_preflight(paths)
     _write_json(args.work_dir / "preflight.json", preflight)
@@ -1091,9 +1097,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "stages": stage_results,
         "skipped_capabilities": skipped,
         "native_core_capture": core_capture,
-        "retrieval_archive": str(
-            args.work_dir.with_name(args.work_dir.name + "-RETURN_ME.tar.gz")
-        ),
+        "retrieval_archive": str(args.work_dir.with_name(args.work_dir.name + "-RETURN_ME.tar.gz")),
     }
     _write_json(args.work_dir / "campaign_summary.json", summary)
     (args.work_dir / "RETURN_ME.txt").write_text(

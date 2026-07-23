@@ -249,10 +249,9 @@ class PersistentDaggerCollectorRunner(AsyncRunner):
     ) -> None:
         validate_dagger_collect_result(request, result)
 
-    def close(self) -> None:
+    def close(self) -> dict[str, Any]:
         if self._closed:
-            return
-        self._closed = True
+            return self.last_close_report
         try:
             if self._collector_process is not None and self._collector_process.is_alive():
                 try:
@@ -260,4 +259,5 @@ class PersistentDaggerCollectorRunner(AsyncRunner):
                 except queue.Full:
                     pass
         finally:
-            super().close()
+            close_report = super().close()
+        return close_report

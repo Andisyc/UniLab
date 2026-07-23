@@ -52,6 +52,16 @@ def test_manifest_rejects_asset_hash_mismatch(tmp_path: Path) -> None:
         WalkMotionDataset.from_manifest(path, asset_root=_ASSET_ROOT)
 
 
+def test_manifest_rejects_non_numeric_fps(tmp_path: Path) -> None:
+    manifest = json.loads(_MANIFEST.read_text())
+    manifest["motions"][0]["fps"] = None
+    path = tmp_path / "manifest.json"
+    path.write_text(json.dumps(manifest))
+
+    with pytest.raises(ValueError, match="manifest FPS must be numeric"):
+        WalkMotionDataset.from_manifest(path, asset_root=_ASSET_ROOT)
+
+
 def test_sampling_is_deterministic_and_never_crosses_clip_boundaries() -> None:
     dataset = WalkMotionDataset.from_manifest(_MANIFEST)
 

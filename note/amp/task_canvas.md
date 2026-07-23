@@ -1,8 +1,8 @@
 # AMP-Only Async Walking Task Canvas
 
 Objective: migrate walk-only AMP into UniLab APPO while preserving UniLab async
-runtime ownership and targeting a useful policy within a 10-20 minute live
-budget.
+runtime ownership and testing a useful policy in one bounded live run. A
+roughly ten-minute increase over the original estimate is acceptable.
 
 Concept Figure: `note/architecture/concept/04_amp_walk_async_method.data.json`.
 
@@ -10,8 +10,8 @@ Concept Figure update owner: main Codex session under active contract versioning
 
 Design Point Register: `contracts/active/method/AMP-WALK-METHOD-v001.md`.
 
-Current step: Steps 1-7 complete; Step 7 is `performance-fail`; stopped before
-Step 8 bounded live acceptance.
+Current step: Steps 1-7 complete; Step 7 overhead is accepted under
+`AMP-WALK-TRAIN-v002`; stopped before Step 8 bounded live acceptance.
 
 Completed:
 
@@ -24,7 +24,8 @@ Completed:
   classify its impact on the AMP/APPO plan;
 - record Phase 1 as simple fixed-forward AMP migration validation with no
   standing requirement, and defer AMP plus distillation to Phase 2.
-- activate `AMP-WALK-METHOD-v001` and `AMP-WALK-TRAIN-v001`;
+- activate `AMP-WALK-METHOD-v001`; supersede the original training gate with
+  `AMP-WALK-TRAIN-v002` after the human accepted additional AMP training time;
 - synchronize the four-block AMP Concept Figure;
 - promote the eight-step engineering plan and acceptance checklist.
 - complete Step 1 generic APPO lifecycle/checkpoint foundation and bounded
@@ -40,14 +41,14 @@ Completed:
 - complete Step 6 formal Hydra async route, spawned train/failure/clean close,
   full `D_2 -> D_3` resume, generic actor-only ONNX/playback, and isolation gates.
 - complete Step 7 matched 2048-env MPS A/B plus env-only ablation; persist the
-  96.6% overhead failure and locate the primary all-body tracking-sensor owner
-  and secondary AMP learner owner.
+  96.6% overhead observation and locate the primary all-body tracking-sensor
+  owner and secondary AMP learner owner. The overhead is diagnostic under v002.
 
 Active files:
 
 - `note/amp/contracts/README.md`
 - `note/amp/contracts/active/method/AMP-WALK-METHOD-v001.md`
-- `note/amp/contracts/active/training/AMP-WALK-TRAIN-v001.md`
+- `note/amp/contracts/active/training/AMP-WALK-TRAIN-v002.md`
 - `note/architecture/concept/04_amp_walk_async_method.data.json`
 - `note/amp/plans/current_engineering_plan.md`
 - `note/amp/checklists/current.md`
@@ -61,6 +62,7 @@ Active files:
 - `note/amp/evidence/2026-07-22-step6-formal-async-runtime.md`
 - `note/amp/evidence/2026-07-23-step7-matched-performance.md`
 - `note/amp/evidence/2026-07-23-step7-matched-performance.json`
+- `note/amp/evidence/2026-07-23-performance-gate-acceptance-revision.md`
 
 Active commands: none. No training process is running. Step 8 bounded live
 training remains outside the completed scope.
@@ -72,12 +74,12 @@ Lifecycle evidence: see
 
 Unresolved risks:
 
-- the 10-20 minute target is rejected on the matched local MPS identity;
-- CUDA target-machine performance remains unverified;
+- exact time-to-useful-policy remains unverified until Step 8;
 - MuJoCo currently materializes world and pelvis-relative tracking sensors for
-  every body although AMP consumes only 14 world-frame body states.
+  every body although AMP consumes only 14 world-frame body states; this is an
+  optional optimization backlog item.
 
-Next action requires a new explicit boundary: either design and validate a
-narrow requested-body backend sensor contract, or run the same matched A/B on
-the intended CUDA target machine. Do not start Step 8 from the current failed
-projection.
+Next action, after explicit authorization: run Step 8 bounded fixed-forward AMP
+training with frozen config/data identity, lifecycle postflight, diagnostics,
+checkpoint, and playback. Sensor narrowing and CUDA A/B are optional follow-up
+optimizations.

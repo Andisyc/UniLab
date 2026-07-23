@@ -2,15 +2,15 @@
 
 Status values: `PASS`, `PARTIAL`, `PENDING`, `BLOCKED`.
 
-Current cursor: Steps 1-7 complete. Step 7 is `performance-fail`; Step 8 is not
-started.
+Current cursor: Steps 1-7 complete. Step 7 overhead is measured and accepted
+under training contract v002; Step 8 is not started.
 
 ## Governance Gate
 
 | Item | Owner | S tier / T kind | Status | Evidence |
 | --- | --- | --- | --- | --- |
 | Active method semantics | AMP contract registry | S0 / T-contract | PASS | `contracts/active/method/AMP-WALK-METHOD-v001.md` |
-| Active async training semantics | AMP contract registry | S0 / T-contract | PASS | `contracts/active/training/AMP-WALK-TRAIN-v001.md` |
+| Active async training semantics | AMP contract registry | S0 / T-contract | PASS | `contracts/active/training/AMP-WALK-TRAIN-v002.md` |
 | Four design points map one-to-one to Concept Figure | docs governance | S0-S1 / T-contract | PASS | `concept/04_amp_walk_async_method.data.json`; atlas checker |
 | Phase 2 distillation isolation | AMP contracts/plan | S0 / T-contract | PASS | Phase boundary in both active contracts |
 
@@ -36,8 +36,8 @@ started.
 | 6 | Formal normal/failure routes close cleanly and resume once before spawn | runtime/checkpoint owner | S2-S3 / T-order,T-persist | PASS | Step 6 evidence; failure close, success close, and `D_2 -> D_3` resume |
 | 6 | Actor-only playback requires no AMP training objects | playback/export owner | S2-S3 / T-connect,T-persist | PASS | Step 6 evidence; generic play, ONNX parity, two-frame render |
 | 6 | Distillation runtime is neither imported nor mutated by Phase 1 | AMP runtime resolver | S2-S3 / T-diff,T-connect | PASS | Runtime import-isolation regression; no distill owner files changed |
-| 7 | Matched AMP overhead is at most 30% or a bottleneck verdict is persisted | performance owner | S3-S4 / T-performance,T-diff | PASS | `evidence/2026-07-23-step7-matched-performance.md`; 96.6% local-MPS overhead, `performance-fail`, sensor/learner owner verdict |
-| 8 | Frozen 10-20 minute run completes with finite diagnostics and clean postflight | formal live owner | S4 / T-live,T-performance | PENDING | required: run identity and evidence ledger |
+| 7 | Matched AMP overhead and bottleneck identity are persisted without lifecycle or capacity failure | performance owner | S3-S4 / T-performance,T-diff | PASS | Step 7 matched evidence plus `evidence/2026-07-23-performance-gate-acceptance-revision.md`; 96.6% local-MPS overhead accepted as diagnostic |
+| 8 | Frozen bounded run completes with finite diagnostics and clean postflight | formal live owner | S4 / T-live,T-performance | PENDING | nominal 20-30 minutes; required: run identity and evidence ledger |
 | 8 | Playback shows fixed-forward walking | playback/acceptance owner | S4 / T-live | PENDING | required: video and physical diagnostics |
 
 ## S/T Matrix
@@ -48,7 +48,7 @@ started.
 | S1 | deterministic owner behavior | manifest, shapes, values, formula, checkpoint |
 | S2 | cross-owner connectivity | env/collector/IPC/learner/runtime routing |
 | S3 | formal spawned route and persisted artifacts | lifecycle, resume, playback, performance identity |
-| S4 | target-machine/live physical evidence | throughput baseline, 10-20 minute run, walking playback |
+| S4 | target-machine/live physical evidence | throughput observation, bounded live run, walking playback |
 
 Required T kinds include `T-contract`, `T-oracle`, `T-shape`, `T-value`,
 `T-order`, `T-connect`, `T-persist`, `T-diff`, `T-performance`, and `T-live`.

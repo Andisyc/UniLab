@@ -40,9 +40,7 @@ FORK_HARD_ARTIFACTS = frozenset(
         "stand_dataset",
     }
 )
-FRESH_HARD_ARTIFACTS = frozenset(
-    {"walk_teacher", "stand_teacher", "walk_dataset", "stand_dataset"}
-)
+FRESH_HARD_ARTIFACTS = frozenset({"walk_teacher", "stand_teacher", "walk_dataset", "stand_dataset"})
 REQUIRED_HARD_ARTIFACTS = FORK_HARD_ARTIFACTS
 RUNTIME_SCOPE = ("src", "scripts/train_distill.py", "conf/distill", "pyproject.toml", "uv.lock")
 
@@ -69,17 +67,16 @@ class MaterializationSpec:
     auto_output_identity: dict[str, str] | None = None
 
 
-def load_materialization_spec(
-    path: Path, *, now: datetime | None = None
-) -> MaterializationSpec:
+def load_materialization_spec(path: Path, *, now: datetime | None = None) -> MaterializationSpec:
     """Parse the reviewed JSON spec and reject incomplete formal identities."""
 
     payload = json.loads(path.read_text())
     hard_artifact_paths = {
-        name: Path(value).resolve()
-        for name, value in payload.pop("hard_artifact_paths").items()
+        name: Path(value).resolve() for name, value in payload.pop("hard_artifact_paths").items()
     }
-    required = FRESH_HARD_ARTIFACTS if payload.get("mode", "fork") == "fresh" else FORK_HARD_ARTIFACTS
+    required = (
+        FRESH_HARD_ARTIFACTS if payload.get("mode", "fork") == "fresh" else FORK_HARD_ARTIFACTS
+    )
     missing = sorted(required - hard_artifact_paths.keys())
     if missing:
         raise ValueError(f"missing hard artifact identities: {missing}")
@@ -94,8 +91,7 @@ def load_materialization_spec(
         conflicting = [field for field in ("run_dir", "artifact_dir") if field in payload]
         if conflicting:
             raise ValueError(
-                "run_name cannot be combined with manual output paths: "
-                + ", ".join(conflicting)
+                "run_name cannot be combined with manual output paths: " + ", ".join(conflicting)
             )
         resolved_repo_root = Path(payload["repo_root"]).resolve()
         generated = resolve_time_sorted_formal_output_identity(
@@ -122,9 +118,7 @@ def load_materialization_spec(
     for field in ("repo_root", "run_dir"):
         payload[field] = Path(payload[field]).resolve()
     payload["parent_run_dir"] = (
-        None
-        if payload.get("parent_run_dir") is None
-        else Path(payload["parent_run_dir"]).resolve()
+        None if payload.get("parent_run_dir") is None else Path(payload["parent_run_dir"]).resolve()
     )
     if payload.get("artifact_dir") is not None:
         payload["artifact_dir"] = Path(payload["artifact_dir"]).resolve()
@@ -165,9 +159,7 @@ def bind_hard_artifact_environment(
     return command_identity
 
 
-def compute_observed_workload(
-    spec: MaterializationSpec, compose_stdout: str
-) -> dict[str, Any]:
+def compute_observed_workload(spec: MaterializationSpec, compose_stdout: str) -> dict[str, Any]:
     """Recompute each formal replay budget from the real parent aggregate."""
 
     cfg = OmegaConf.create(compose_stdout)
@@ -182,9 +174,7 @@ def compute_observed_workload(
     )
     replay_labels = tuple(
         str(label)
-        for label in OmegaConf.select(
-            cfg, "training.workflow.dagger_min_transition_replay_labels"
-        )
+        for label in OmegaConf.select(cfg, "training.workflow.dagger_min_transition_replay_labels")
     )
     balance_key = str(OmegaConf.select(cfg, "training.workflow.dagger_balance_key"))
     if balance_key != "scenario":
@@ -196,9 +186,7 @@ def compute_observed_workload(
 
     if spec.identity.mode == "fresh":
         walk = load_distillation_dataset(spec.hard_artifact_paths["walk_dataset"], device="cpu")
-        stand = load_distillation_dataset(
-            spec.hard_artifact_paths["stand_dataset"], device="cpu"
-        )
+        stand = load_distillation_dataset(spec.hard_artifact_paths["stand_dataset"], device="cpu")
         labels = ("walk_flat",) * walk.num_samples + ("static_stand",) * stand.num_samples
         parent_rows = walk.num_samples + stand.num_samples
     else:
@@ -214,9 +202,7 @@ def compute_observed_workload(
     effective_updates: list[int] = []
     for _ in range(spec.identity.dagger_iterations):
         labels += tuple(
-            scenario
-            for scenario in scenario_names
-            for _ in range(spec.identity.samples_per_role)
+            scenario for scenario in scenario_names for _ in range(spec.identity.samples_per_role)
         )
         required = required_balanced_replay_updates_for_labels(
             labels,
@@ -326,7 +312,11 @@ def observe_gate0(spec: MaterializationSpec) -> Gate0Observations:
         compose_stdout=compose.stdout,
         compose_stderr=compose.stderr,
         dependency_identity=dependency_identity,
-        gpu_query={"returncode": gpu.returncode, "stdout": gpu.stdout.strip(), "stderr": gpu.stderr},
+        gpu_query={
+            "returncode": gpu.returncode,
+            "stdout": gpu.stdout.strip(),
+            "stderr": gpu.stderr,
+        },
         workload_identity=workload_identity,
     )
 

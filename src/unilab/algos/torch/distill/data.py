@@ -304,11 +304,7 @@ def _safe_runtime_repr(value: Any) -> str:
     try:
         return _ORIGINAL_REPR(value)
     except BaseException as error:  # pragma: no cover - defensive runtime probe
-        return (
-            "<repr-error "
-            f"type={_ORIGINAL_TYPE(error).__name__} "
-            f"repr={_ORIGINAL_REPR(error)}>"
-        )
+        return f"<repr-error type={_ORIGINAL_TYPE(error).__name__} repr={_ORIGINAL_REPR(error)}>"
 
 
 def _scenario_label_debug_snapshot(
@@ -960,8 +956,7 @@ def build_multitask_distillation_dataset(
                 "metadata_workflow_scenario": metadata_scenario,
             }
             print(
-                "[distill-source-contract-sentinel] "
-                + json.dumps(snapshot, sort_keys=True),
+                "[distill-source-contract-sentinel] " + json.dumps(snapshot, sort_keys=True),
                 flush=True,
             )
             raise ValueError(
@@ -989,15 +984,10 @@ def build_multitask_distillation_dataset(
                 }
                 _emit_data_runtime(
                     "multitask/source_annotation_failure",
-                    **{
-                        key: value
-                        for key, value in snapshot.items()
-                        if key != "stage"
-                    },
+                    **{key: value for key, value in snapshot.items() if key != "stage"},
                 )
                 print(
-                    "[distill-source-annotation-sentinel] "
-                    + json.dumps(snapshot, sort_keys=True),
+                    "[distill-source-annotation-sentinel] " + json.dumps(snapshot, sort_keys=True),
                     flush=True,
                 )
                 raise ValueError(
@@ -1171,13 +1161,9 @@ def build_multitask_distillation_dataset(
                 "multitask/scenario_concat_chunk",
                 **source_range,
                 observation_timing="post_flatten_slice_check",
-                source_scenario_labels=_scenario_label_debug_snapshot(
-                    dataset.scenario_labels
-                ),
+                source_scenario_labels=_scenario_label_debug_snapshot(dataset.scenario_labels),
                 aggregate_slice=_scenario_label_debug_snapshot(aggregate_slice),
-                source_matches_aggregate_slice=(
-                    dataset.scenario_labels == aggregate_slice
-                ),
+                source_matches_aggregate_slice=(dataset.scenario_labels == aggregate_slice),
             )
         _emit_data_runtime(
             "multitask/scenario_concat_complete",
@@ -1236,9 +1222,7 @@ def build_multitask_distillation_dataset(
         teacher_actions_shape=tuple(teacher_actions.shape),
         commands_shape=None if commands is None else tuple(commands.shape),
         command_intents=(
-            None
-            if command_intents is None
-            else _command_intent_debug_snapshot(command_intents)
+            None if command_intents is None else _command_intent_debug_snapshot(command_intents)
         ),
         scenario_labels=(
             None
@@ -1262,9 +1246,7 @@ def build_multitask_distillation_dataset(
     if command_intents is not None:
         metadata["command_intent_counts"] = _label_counts(command_intents)
     before_final_validation = (
-        None
-        if command_intents is None
-        else _command_intent_debug_snapshot(command_intents)
+        None if command_intents is None else _command_intent_debug_snapshot(command_intents)
     )
     before_final_scenario_validation = (
         None
@@ -1345,9 +1327,7 @@ def build_multitask_distillation_dataset(
                     {
                         **source_range,
                         "num_samples": dataset.num_samples,
-                        "scenario_labels": _scenario_label_debug_snapshot(
-                            dataset.scenario_labels
-                        ),
+                        "scenario_labels": _scenario_label_debug_snapshot(dataset.scenario_labels),
                     }
                 )
             scenario_snapshot = {
@@ -1406,10 +1386,7 @@ def build_multitask_distillation_dataset(
             "before_final_validation": before_final_validation,
             "after_final_validation_failure": _command_intent_debug_snapshot(command_intents),
         }
-        print(
-            "[distill-command-intent-sentinel] "
-            + json.dumps(snapshot, sort_keys=True)
-        )
+        print("[distill-command-intent-sentinel] " + json.dumps(snapshot, sort_keys=True))
         raise
 
 

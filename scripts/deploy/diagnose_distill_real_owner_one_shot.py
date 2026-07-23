@@ -199,9 +199,7 @@ def build_stage_matrix(
     common_env = {
         "HYDRA_FULL_ERROR": "1",
         "PYTHONFAULTHANDLER": "1",
-        "UNILAB_NATIVE_ABORT_ON_CORRUPTION": (
-            "1" if native_abort_on_corruption else "0"
-        ),
+        "UNILAB_NATIVE_ABORT_ON_CORRUPTION": ("1" if native_abort_on_corruption else "0"),
     }
     common_env.update({key: str(value) for key, value in role_env.items()})
 
@@ -382,7 +380,8 @@ def _verdict(stage_results: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         str(row["name"])
         for row in stage_results
         if row.get("status") != "completed"
-        and row.get("evidence_level") in {"native-symptom-confirmed", "first-invalid-operation-confirmed"}
+        and row.get("evidence_level")
+        in {"native-symptom-confirmed", "first-invalid-operation-confirmed"}
     ]
     if config_failed:
         boundary = "CAMPAIGN_CONFIGURATION_FAILED"
@@ -417,10 +416,7 @@ def _selected_groups(raw_groups: str, known_groups: Iterable[str]) -> list[str]:
     unknown = sorted(set(selected).difference(known))
     if unknown:
         raise ValueError(
-            "unknown stage group(s): "
-            + ",".join(unknown)
-            + "; known groups: "
-            + ",".join(known)
+            "unknown stage group(s): " + ",".join(unknown) + "; known groups: " + ",".join(known)
         )
     if not selected:
         raise ValueError("--groups must be 'all' or a comma-separated non-empty group list")
@@ -488,7 +484,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     teacher_checkpoint = args.teacher_checkpoint.resolve()
     stand_teacher_checkpoint = args.stand_teacher_checkpoint.resolve()
     existing_apport = args.existing_apport.resolve()
-    for path in (aggregate, checkpoint, teacher_checkpoint, stand_teacher_checkpoint, existing_apport):
+    for path in (
+        aggregate,
+        checkpoint,
+        teacher_checkpoint,
+        stand_teacher_checkpoint,
+        existing_apport,
+    ):
         if not path.is_file():
             raise FileNotFoundError(path)
     sources, _dimensions = _sources_from_seed_aggregate(aggregate)
@@ -607,22 +609,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         for spec in matrix[group_name]:
             if selected_stage_names is not None and spec.name not in selected_stage_names:
                 continue
-            stage_results.append(
-                _run_one_stage(spec, work_dir, kernel_since=campaign_started)
-            )
+            stage_results.append(_run_one_stage(spec, work_dir, kernel_since=campaign_started))
     if "gpu_dual_resident" in selected_groups:
         dual_specs = matrix["gpu_dual_resident"]
         if selected_stage_names is not None:
-            dual_specs = [
-                spec for spec in dual_specs if spec.name in selected_stage_names
-            ]
-        stage_results.extend(
-            _run_dual_group(dual_specs, work_dir, kernel_since=campaign_started)
-        )
+            dual_specs = [spec for spec in dual_specs if spec.name in selected_stage_names]
+        stage_results.extend(_run_dual_group(dual_specs, work_dir, kernel_since=campaign_started))
     if not stage_results:
-        raise ValueError(
-            "no stages selected; check --groups and --stage-names"
-        )
+        raise ValueError("no stages selected; check --groups and --stage-names")
 
     collect_health_snapshot(work_dir / "health-after.json", kernel_since_epoch=campaign_started)
     core_after = _core_inventory()

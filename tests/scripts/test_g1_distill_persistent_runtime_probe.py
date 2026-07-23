@@ -56,8 +56,7 @@ def test_persistent_runtime_probe_accepts_restart_each_request_summary() -> None
     summary = _valid_summary()
     summary["worker_lifecycle"] = "restart_each_request"
     summary["sequence"] = [
-        {**row, "worker_pid": index + 10}
-        for index, row in enumerate(summary["sequence"])
+        {**row, "worker_pid": index + 10} for index, row in enumerate(summary["sequence"])
     ]
     summary.pop("close_report")
     summary["close_reports"] = [

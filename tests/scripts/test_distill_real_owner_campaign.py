@@ -176,9 +176,12 @@ def test_stage_matrix_keeps_real_cpu_gpu_and_lifecycle_controls_matched(tmp_path
         "cpu",
         "cuda:0",
     ]
-    assert matrix["gpu_continuous"][0].command[
-        matrix["gpu_continuous"][0].command.index("--rounds") + 1
-    ] == "3"
+    assert (
+        matrix["gpu_continuous"][0].command[
+            matrix["gpu_continuous"][0].command.index("--rounds") + 1
+        ]
+        == "3"
+    )
     assert len(matrix["gpu_restart_each_round"]) == 3
     assert all(
         spec.command[spec.command.index("--rounds") + 1] == "1"
@@ -258,9 +261,9 @@ def test_real_owner_selected_groups_reject_unknown_group() -> None:
 
 
 def test_real_owner_selected_stage_names_allow_single_cpu_capture() -> None:
-    assert diagnose_distill_real_owner_one_shot._selected_stage_names(
+    assert diagnose_distill_real_owner_one_shot._selected_stage_names("offline_cpu_fresh") == {
         "offline_cpu_fresh"
-    ) == {"offline_cpu_fresh"}
+    }
     assert diagnose_distill_real_owner_one_shot._selected_stage_names("all") is None
 
 

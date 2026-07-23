@@ -46,9 +46,7 @@ def _write_sources(root: Path) -> Path:
         torch.full((4, 4), 2.0),
         torch.full((4, 4), 2.0),
         teacher_actions=torch.full((4, 3), 2.0),
-        commands=torch.tensor(
-            [[0.2, 0.0, 0.0], [0.2, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]
-        ),
+        commands=torch.tensor([[0.2, 0.0, 0.0], [0.2, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]),
         command_intents=("active", "active", "inactive", "inactive"),
         role_labels=("walk_flat", "walk_flat", "stand", "stand"),
         scenario_labels=("walk_to_stop",) * 4,

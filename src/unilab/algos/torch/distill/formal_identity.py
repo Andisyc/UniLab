@@ -101,9 +101,7 @@ def resolve_time_sorted_formal_output_identity(
         resolved_repo_root / "logs" / "distill_role_artifacts"
         if artifact_root is None
         else (
-            artifact_root
-            if artifact_root.is_absolute()
-            else resolved_repo_root / artifact_root
+            artifact_root if artifact_root.is_absolute() else resolved_repo_root / artifact_root
         ).resolve()
     )
 
@@ -196,9 +194,7 @@ def build_formal_command_identity(spec: FormalDaggerIdentitySpec) -> dict[str, A
     _validate_spec(spec)
     outputs, materialization = _identity_paths(spec)
     existing = [
-        path
-        for path in (*outputs.values(), *materialization.values())
-        if Path(path).exists()
+        path for path in (*outputs.values(), *materialization.values()) if Path(path).exists()
     ]
     if existing:
         raise FileExistsError(f"formal output already exists: {existing}")
@@ -238,9 +234,7 @@ def build_formal_command_identity(spec: FormalDaggerIdentitySpec) -> dict[str, A
             ]
         )
     if spec.transition_max_env_steps is not None:
-        argv.append(
-            f"training.workflow.transition_max_env_steps={spec.transition_max_env_steps}"
-        )
+        argv.append(f"training.workflow.transition_max_env_steps={spec.transition_max_env_steps}")
     return {
         "schema_version": 1,
         "training_executed": False,
@@ -248,9 +242,7 @@ def build_formal_command_identity(spec: FormalDaggerIdentitySpec) -> dict[str, A
         "lineage": {
             "parent_iteration": spec.parent_iteration if spec.mode == "fork" else None,
             "source": (
-                "original_parent_iteration_3"
-                if spec.mode == "fork"
-                else "fresh_teacher_bootstrap"
+                "original_parent_iteration_3" if spec.mode == "fork" else "fresh_teacher_bootstrap"
             ),
             "r6_sentinel_promoted": False,
         },
@@ -331,28 +323,24 @@ def build_formal_supervisor_source(identity: dict[str, Any]) -> str:
     """Render the one-shot supervisor for an already frozen command identity."""
 
     outputs = identity["output_paths"]
-    env = " ".join(
-        f"{name}={shlex.quote(str(value))}" for name, value in identity["env"].items()
-    )
+    env = " ".join(f"{name}={shlex.quote(str(value))}" for name, value in identity["env"].items())
     argv = shlex.join(identity["argv"])
-    absence_checks = "\n".join(
-        f"test ! -e {shlex.quote(path)}" for path in outputs.values()
-    )
+    absence_checks = "\n".join(f"test ! -e {shlex.quote(path)}" for path in outputs.values())
     return f"""#!/usr/bin/env bash
 set -euo pipefail
-cd {shlex.quote(identity['repo_root'])}
+cd {shlex.quote(identity["repo_root"])}
 {absence_checks}
-nvidia-smi --query-compute-apps=timestamp,pid,gpu_uuid,used_gpu_memory --format=csv,noheader,nounits --loop-ms=250 > {shlex.quote(outputs['gpu_telemetry'])} &
+nvidia-smi --query-compute-apps=timestamp,pid,gpu_uuid,used_gpu_memory --format=csv,noheader,nounits --loop-ms=250 > {shlex.quote(outputs["gpu_telemetry"])} &
 SAMPLER_PID=$!
 trap 'kill "$SAMPLER_PID" 2>/dev/null || true; wait "$SAMPLER_PID" 2>/dev/null || true' EXIT
-{env} /usr/bin/time -v -o {shlex.quote(outputs['time'])} {argv} > {shlex.quote(outputs['log'])} 2>&1
+{env} /usr/bin/time -v -o {shlex.quote(outputs["time"])} {argv} > {shlex.quote(outputs["log"])} 2>&1
 """
 
 
 def build_formal_oracle_source() -> str:
     """Render a fail-closed pre/post oracle that never launches training."""
 
-    return '''#!/usr/bin/env python3
+    return """#!/usr/bin/env python3
 from __future__ import annotations
 
 import argparse
@@ -456,4 +444,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-'''
+"""

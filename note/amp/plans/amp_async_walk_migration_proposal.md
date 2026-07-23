@@ -17,7 +17,7 @@ The human confirmed:
 The accepted semantics have been extracted into:
 
 - `../contracts/active/method/AMP-WALK-METHOD-v001.md`
-- `../contracts/active/training/AMP-WALK-TRAIN-v001.md`
+- `../contracts/active/training/AMP-WALK-TRAIN-v002.md`
 - `../../architecture/concept/04_amp_walk_async_method.data.json`
 
 The current implementation route and acceptance state are now owned by:
@@ -28,4 +28,3 @@ The current implementation route and acceptance state are now owned by:
 This file is no longer a current design or execution authority. New semantic
 changes require a new replaceable proposal rather than editing the active
 contracts silently.
-

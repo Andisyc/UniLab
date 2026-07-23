@@ -7,21 +7,22 @@ Date: 2026-07-22
 Contracts:
 
 - `AMP-WALK-METHOD-v001`
-- `AMP-WALK-TRAIN-v001`
+- `AMP-WALK-TRAIN-v002`
 
 Concept Figure:
 
 - `note/architecture/concept/04_amp_walk_async_method.data.json`
 
-Plan cursor: Steps 1-7 complete. Step 7 is `performance-fail`; stopped before
-Step 8 bounded live acceptance.
+Plan cursor: Steps 1-7 complete. Measured Step 7 overhead is accepted under
+`AMP-WALK-TRAIN-v002`; stopped before Step 8 bounded live acceptance.
 
 ## Terminal Outcome
 
 One fixed-nonzero-forward G1 AMP policy trains through UniLab's official
 asynchronous APPO route, produces an atomically reloadable actor checkpoint,
 exits without process/shared-memory residue, and is evaluated in one bounded
-10-20 minute run. Standing, running, recovery, gait control, Motrix, and
+live run, nominally 20-30 minutes under training contract v002. Standing,
+running, recovery, gait control, Motrix, and
 AMP/distillation integration remain outside Phase 1.
 
 ## Human Method Map
@@ -58,10 +59,11 @@ approvals. The one-shot deletion test produces four execution boundaries:
 2. **Main engineering closure, Steps 2-6:** implement payload, data/env, learner,
    and formal runtime with embedded local/integration verification in one
    authorized closure.
-3. **Performance boundary, Step 7:** optimization is allowed only after float32
-   correctness and requires measured A/B evidence.
-4. **Material live boundary, Step 8:** the 10-20 minute GPU run has external cost
-   and requires explicit authorization.
+3. **Performance observation boundary, Step 7:** optimization is allowed only
+   after float32 correctness and requires measured A/B evidence. A fixed
+   overhead percentage is not a Phase 1 acceptance gate under training v002.
+4. **Material live boundary, Step 8:** the bounded GPU run has external cost and
+   requires explicit authorization.
 
 Different owner files and test tiers inside Steps 2-6 do not create additional
 approval gates.
@@ -207,22 +209,25 @@ benchmark command, and performance evidence ledger.
 Expected evidence: S3-S4 / T-performance,T-diff with one matched APPO-versus-AMP
 A/B artifact.
 
-Stop condition: AMP overhead is at most 30%, or the exact bottleneck and
-rejection of the 10-20 minute projection are recorded.
+Stop condition: matched overhead and owner-level bottlenecks are persisted;
+forward progress, bounded completion, memory capacity, and lifecycle remain
+valid. Overhead alone does not block Phase 1.
 
-Observed result: `performance-fail` on the matched local MPS identity. Full AMP
-has 96.6% reconstructed end-to-end time overhead. The primary owner is the
+Observed result: the matched local MPS identity has 96.6% reconstructed
+end-to-end time overhead. The primary owner is the
 over-broad MuJoCo all-body/world-and-base tracking sensor route; the secondary
 owner is AMP learner work. See
 `evidence/2026-07-23-step7-matched-performance.md`. The stop condition is met by
-the persisted bottleneck verdict, not by meeting the 30% target.
+the persisted observation and three clean completed runs. Under
+`AMP-WALK-TRAIN-v002`, the human owner accepts this extra training time and the
+result does not block Step 8.
 
-### Step 8 / 8: Bounded 10-20 Minute Live Acceptance
+### Step 8 / 8: Bounded Live Acceptance
 
 Objective: test the wall-clock and fixed-forward walking hypothesis.
 
-Scope: one frozen command/config/data/checkpoint identity, 10-20 minute run,
-postflight lifecycle check, diagnostics, and playback.
+Scope: one frozen command/config/data/checkpoint identity, nominally 20-30
+minutes of training, postflight lifecycle check, diagnostics, and playback.
 
 Non-scope: standing, stopping, running, recovery, gait control, indefinite
 tuning, Motrix, or Phase 2 distillation.
@@ -235,8 +240,9 @@ checkpoint hash, task/AMP/combined reward, logits/loss/version curves,
 termination rate, lifecycle report, and playback.
 
 Stop condition: classify the result as runtime-pass/quality-pass,
-runtime-pass/quality-fail, lifecycle-fail, or performance-fail. Do not infer a
-useful policy from a clean process or finite checkpoint alone.
+runtime-pass/quality-fail, lifecycle-fail, or capacity-fail. Extra bounded
+training time alone is not failure. Do not infer a useful policy from a clean
+process or finite checkpoint alone.
 
 ## Conditional Escalation
 
@@ -252,7 +258,6 @@ useful policy from a clean process or finite checkpoint alone.
 ## Current Authority Boundary
 
 Steps 1-7 are complete under their accepted contracts. Step 8 simulator startup,
-10-20 minute training, policy-quality acceptance, and any performance redesign
-remain unauthorized until the user explicitly continues. The current local MPS
-performance verdict rejects the Step 8 projection unless a new optimization
-boundary or CUDA target-machine A/B supersedes it.
+bounded training, and policy-quality acceptance remain unauthorized until the
+user explicitly continues. Performance redesign and CUDA A/B are optional
+optimization work, not prerequisites for Step 8.

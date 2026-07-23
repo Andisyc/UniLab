@@ -330,8 +330,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     failed_sources = [
         row
         for row in source_inspection
-        if isinstance(row.get("annotate"), Mapping)
-        and row["annotate"].get("status") == "FAIL"
+        if isinstance(row.get("annotate"), Mapping) and row["annotate"].get("status") == "FAIL"
     ]
     if failed_sources:
         report["status"] = "SOURCE_ANNOTATE_FAILED"

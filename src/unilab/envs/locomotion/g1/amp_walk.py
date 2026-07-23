@@ -113,9 +113,7 @@ class G1AMPWalkEnv(G1WalkEnv):
         return obs
 
     def _compute_amp_observation(self, env_ids: np.ndarray | None = None) -> np.ndarray:
-        pos, quat, lin_vel, ang_vel = self._backend.get_body_state_w(
-            self._amp_body_ids_with_anchor
-        )
+        pos, quat, lin_vel, ang_vel = self._backend.get_body_state_w(self._amp_body_ids_with_anchor)
         if env_ids is not None:
             pos = pos[env_ids]
             quat = quat[env_ids]

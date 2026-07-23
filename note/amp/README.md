@@ -1,7 +1,7 @@
 # AMP-Only Async Walking Control Room
 
-Status: `Steps 1-7 complete`; local MPS performance gate failed and Step 8 is
-not authorized.
+Status: `Steps 1-7 complete`; measured AMP overhead is accepted under training
+contract v002 and Step 8 awaits explicit authorization.
 
 This directory governs the proposed migration of walk-only AMP training from
 `/Users/chengyuxuan/ArtiIntComVis/AMP_mjlab` into UniLab's asynchronous APPO
@@ -46,5 +46,6 @@ The current cursor is Step 1 / 8, pending explicit implementation authority.
 The accepted document activation does not authorize code changes, tests,
 simulator startup, checkpoint IO, or training.
 
-No speedup or policy-quality claim is active. The target of reaching a useful
-walking policy within roughly 10-20 minutes is a live acceptance hypothesis.
+No speedup or policy-quality claim is active. Step 8 will test useful walking
+within one bounded run; a roughly ten-minute increase over the original
+10-20-minute estimate is explicitly acceptable.

@@ -21,9 +21,7 @@ def file_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _check_file_identity(
-    failures: list[str], *, name: str, identity: dict[str, Any]
-) -> None:
+def _check_file_identity(failures: list[str], *, name: str, identity: dict[str, Any]) -> None:
     path = Path(identity["path"])
     if not path.is_file() or file_sha256(path) != identity["sha256"]:
         failures.append(f"frozen input drift: {name}")
@@ -91,7 +89,10 @@ def validate_postflight(
     final_checkpoint_sha: str | None = None
     final_checkpoint_path: str | None = None
     for offset, iteration in enumerate(iterations, start=1):
-        if offset > len(expected_updates) or iteration.get("updates") != expected_updates[offset - 1]:
+        if (
+            offset > len(expected_updates)
+            or iteration.get("updates") != expected_updates[offset - 1]
+        ):
             failures.append(f"iteration {offset} effective update count mismatch")
         if iteration.get("collection_execution_mode") != expected_mode:
             failures.append(f"iteration {offset} execution mode mismatch")
@@ -231,11 +232,15 @@ def _runtime_identity() -> tuple[str, dict[str, Any], dict[str, Any]]:
         capture_output=True,
         text=True,
     )
-    return head, dependency, {
-        "returncode": gpu.returncode,
-        "stdout": gpu.stdout.strip(),
-        "stderr": gpu.stderr,
-    }
+    return (
+        head,
+        dependency,
+        {
+            "returncode": gpu.returncode,
+            "stdout": gpu.stdout.strip(),
+            "stderr": gpu.stderr,
+        },
+    )
 
 
 def main() -> int:

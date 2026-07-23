@@ -54,7 +54,9 @@ def _require_exact_contract(manifest: dict[str, Any]) -> None:
     if manifest.get("anchor_body_name") != AMP_ANCHOR_BODY_NAME:
         raise ValueError("AMP walk manifest anchor_body_name does not match the canonical contract")
     if manifest.get("anchor_body_index") != AMP_ANCHOR_BODY_INDEX:
-        raise ValueError("AMP walk manifest anchor_body_index does not match the canonical contract")
+        raise ValueError(
+            "AMP walk manifest anchor_body_index does not match the canonical contract"
+        )
 
 
 class WalkMotionDataset:
@@ -142,7 +144,10 @@ class WalkMotionDataset:
                     f"frame count mismatch for {path.name}: expected {entry.get('frames')}, got {frames}"
                 )
             fps_values = np.asarray(source["fps"]).reshape(-1)
-            if fps_values.size != 1 or float(fps_values[0]) != float(entry.get("fps")):
+            manifest_fps = entry.get("fps")
+            if isinstance(manifest_fps, bool) or not isinstance(manifest_fps, (int, float)):
+                raise ValueError("manifest FPS must be numeric")
+            if fps_values.size != 1 or float(fps_values[0]) != float(manifest_fps):
                 raise ValueError(f"FPS mismatch for {path.name}")
             arrays = {name: np.asarray(source[name]) for name in _REQUIRED_ARRAYS}
         return build_amp_observation(**arrays)

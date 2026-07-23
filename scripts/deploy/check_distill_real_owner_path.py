@@ -209,10 +209,7 @@ def _load_student_module(path: Path, *, device: str) -> torch.nn.Module:
 
 def _model_weight_sum(model: torch.nn.Module) -> float:
     return float(
-        sum(
-            parameter.detach().double().sum().cpu().item()
-            for parameter in model.parameters()
-        )
+        sum(parameter.detach().double().sum().cpu().item() for parameter in model.parameters())
     )
 
 

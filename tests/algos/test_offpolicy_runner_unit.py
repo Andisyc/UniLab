@@ -414,10 +414,12 @@ def test_offpolicy_runner_close_releases_active_logger_after_interrupt(
     assert logger.finish_calls == 0
     assert logger.close_calls == 0
 
-    runner.close()
+    close_report = runner.close()
 
     assert runner._active_logger is None
     assert logger.close_calls == 1
+    assert close_report["state"] == "complete"
+    assert close_report["resource_count"] > 0
 
 
 def test_offpolicy_runner_async_waits_for_train_start_threshold(

@@ -30,6 +30,7 @@ class _NoOpTrainer:
             (batch_size, 0) if batch.teacher_actions is None else tuple(batch.teacher_actions.shape)
         )
         return SimpleNamespace(
+            update_count=self.update_count,
             loss=0.0,
             student_grad_norm=0.0,
             student_action_shape=action_shape,

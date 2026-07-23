@@ -218,9 +218,7 @@ def main() -> None:
             scenario_specs=scenario_specs,
         )
 
-    scenarios = ("walk_flat", "static_stand", "walk_to_stop", "walk_flat") * int(
-        args.repetitions
-    )
+    scenarios = ("walk_flat", "static_stand", "walk_to_stop", "walk_flat") * int(args.repetitions)
 
     def collect(runtime, *, index: int, scenario: str, version: int) -> None:
         output_path = args.work_dir / f"{index:04d}-{scenario}.pt"

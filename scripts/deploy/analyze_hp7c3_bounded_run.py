@@ -61,7 +61,9 @@ def parse_gpu_csv(path: Path) -> dict[str, Any]:
                     "used_gpu_memory_mib": int(match.group()) if match else None,
                 }
             )
-    memories = [row["used_gpu_memory_mib"] for row in rows if row["used_gpu_memory_mib"] is not None]
+    memories = [
+        row["used_gpu_memory_mib"] for row in rows if row["used_gpu_memory_mib"] is not None
+    ]
     result.update(
         {
             "sample_count": len(rows),

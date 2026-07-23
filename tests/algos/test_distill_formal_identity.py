@@ -133,9 +133,7 @@ def test_fresh_formal_identity_owns_bootstrap_and_has_no_parent_lineage(
     assert "training.workflow.adopt_legacy_artifacts=false" in identity["argv"]
     assert "training.workflow.transition_max_env_steps=24576" in identity["argv"]
     assert identity["workload"]["total_effective_updates"] == 147456
-    assert identity["output_paths"]["artifact_dir"] == str(
-        tmp_path / "formal_role_artifacts_r1"
-    )
+    assert identity["output_paths"]["artifact_dir"] == str(tmp_path / "formal_role_artifacts_r1")
 
 
 @pytest.mark.parametrize(
@@ -145,7 +143,10 @@ def test_fresh_formal_identity_owns_bootstrap_and_has_no_parent_lineage(
         ({"parent_run_dir": Path("/tmp/r6_sentinel")}, "r6 sentinel"),
         ({"run_dir": Path("/tmp/hp7c3_bounded_persistent_r6")}, "r6 sentinel"),
         ({"dagger_iterations": 0}, "dagger_iterations"),
-        ({"effective_updates_by_iteration": (12320, 0, 12384, 12416)}, "effective_updates_by_iteration"),
+        (
+            {"effective_updates_by_iteration": (12320, 0, 12384, 12416)},
+            "effective_updates_by_iteration",
+        ),
         ({"execution_mode": "legacy"}, "persistent_async"),
     ],
 )
@@ -173,12 +174,8 @@ def test_time_sorted_output_identity_derives_fresh_paths_from_run_name(tmp_path:
     )
 
     assert identity.stem == "20260720-090807_g1_walk_stand_fresh_oom_r2"
-    assert identity.run_dir == (
-        tmp_path / "logs" / "distill_workflow" / identity.stem
-    )
-    assert identity.artifact_dir == (
-        tmp_path / "logs" / "distill_role_artifacts" / identity.stem
-    )
+    assert identity.run_dir == (tmp_path / "logs" / "distill_workflow" / identity.stem)
+    assert identity.artifact_dir == (tmp_path / "logs" / "distill_role_artifacts" / identity.stem)
 
 
 @pytest.mark.parametrize("run_name", ["", "../escape", "name/child", "has space"])
@@ -217,8 +214,8 @@ def test_formal_oracle_is_syntax_valid_and_preflight_never_trains(tmp_path: Path
     assert '"training_executed": False' in source
     assert 'parser.add_argument("--preflight"' in source
     assert "output paths already exist" in source
-    assert "subprocess.run(freeze[\"command\"]" not in source
-    assert 'effective_updates_by_iteration' in source
+    assert 'subprocess.run(freeze["command"]' not in source
+    assert "effective_updates_by_iteration" in source
     assert 'iteration.get("updates")' in source
 
 
@@ -244,9 +241,7 @@ def test_formal_freeze_hashes_runtime_and_training_inputs(tmp_path: Path) -> Non
     assert freeze["repo"]["head"] == "a" * 40
     assert freeze["repo"]["runtime_diff_clean"] is True
     assert freeze["source_identity"]["workflow"]["size"] == len("runtime-owner\n")
-    assert freeze["hard_artifacts"]["parent_checkpoint"]["size"] == len(
-        b"formal-parent"
-    )
+    assert freeze["hard_artifacts"]["parent_checkpoint"]["size"] == len(b"formal-parent")
     assert freeze["command"]["lineage"]["r6_sentinel_promoted"] is False
 
 

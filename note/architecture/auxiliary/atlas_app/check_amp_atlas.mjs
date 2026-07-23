@@ -12,7 +12,7 @@ const methodContract = read(
   "note/amp/contracts/active/method/AMP-WALK-METHOD-v001.md",
 );
 const trainingContract = read(
-  "note/amp/contracts/active/training/AMP-WALK-TRAIN-v001.md",
+  "note/amp/contracts/active/training/AMP-WALK-TRAIN-v002.md",
 );
 const registry = read("note/amp/contracts/README.md");
 const plan = read("note/amp/plans/current_engineering_plan.md");
@@ -150,7 +150,8 @@ for (const edge of concept.edges || []) {
 
 for (const required of [
   "AMP-WALK-METHOD-v001",
-  "AMP-WALK-TRAIN-v001",
+  "AMP-WALK-TRAIN-v002",
+  "history/training/AMP-WALK-TRAIN-v001.md",
 ]) {
   if (!registry.includes(required)) throw new Error(`AMP registry missing ${required}`);
 }
@@ -160,7 +161,7 @@ if (!methodContract.includes("note/architecture/concept/04_amp_walk_async_method
 for (const required of [
   "AMP-WALK-METHOD-v001",
   "learner freezes `D_k`",
-  "implementation_status: planned",
+  "implementation_status: async_route_verified",
 ]) {
   if (!trainingContract.includes(required)) {
     throw new Error(`AMP training contract missing ${required}`);

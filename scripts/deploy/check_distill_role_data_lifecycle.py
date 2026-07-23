@@ -293,7 +293,9 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--cycles", type=int, default=16)
     parser.add_argument("--report-every", type=int, default=8)
     parser.add_argument("--keep-cycle-outputs", action="store_true")
-    parser.add_argument("--test-inject-failure-cycle", type=int, default=None, help=argparse.SUPPRESS)
+    parser.add_argument(
+        "--test-inject-failure-cycle", type=int, default=None, help=argparse.SUPPRESS
+    )
     return parser.parse_args(argv)
 
 

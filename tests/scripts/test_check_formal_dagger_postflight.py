@@ -167,7 +167,7 @@ def _fixture(tmp_path: Path, mod: ModuleType) -> tuple[Path, dict, dict, dict]:
                 "effective_updates_by_iteration": [2, 4],
                 "samples_per_role": 2,
                 "execution_mode": "persistent_async",
-            }
+            },
         },
         "output_paths": outputs,
         "dependency_identity": dependency,

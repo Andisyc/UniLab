@@ -104,11 +104,14 @@ def test_persistent_runner_close_is_idempotent_and_reaps_worker(tmp_path):
     runner.start()
     process = runner._collector_process
 
-    runner.close()
-    runner.close()
+    first_report = runner.close()
+    second_report = runner.close()
 
     assert process is not None
     assert not process.is_alive()
+    assert first_report == second_report
+    assert first_report["state"] == "complete"
+    assert first_report["resource_count"] == 2
 
 
 def test_persistent_runner_rejects_request_outside_activated_checkpoint_barrier(tmp_path):

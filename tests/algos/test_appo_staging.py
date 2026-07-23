@@ -113,9 +113,7 @@ def test_staging_pool_preserves_extra_field_dtype_and_time_semantics() -> None:
         "amp_state": RolloutFieldSpec(
             shape=(_NUM_ENVS, _NUM_STEPS, 195), dtype="float16", time_axis=True
         ),
-        "collector_version": RolloutFieldSpec(
-            shape=(_NUM_ENVS,), dtype="int64", time_axis=False
-        ),
+        "collector_version": RolloutFieldSpec(shape=(_NUM_ENVS,), dtype="int64", time_axis=False),
     }
     pool = RolloutStagingPool(
         capacity=2,
@@ -126,9 +124,7 @@ def test_staging_pool_preserves_extra_field_dtype_and_time_semantics() -> None:
 
     pool.stage_numpy_views(
         {
-            "amp_state": np.full(
-                (_NUM_ENVS, _NUM_STEPS, 195), 2.5, dtype=np.float16
-            ),
+            "amp_state": np.full((_NUM_ENVS, _NUM_STEPS, 195), 2.5, dtype=np.float16),
             "collector_version": np.arange(_NUM_ENVS, dtype=np.int64),
         }
     )

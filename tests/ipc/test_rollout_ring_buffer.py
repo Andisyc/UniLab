@@ -278,9 +278,7 @@ def test_ring_buffer_extra_typed_fields_roundtrip_through_attached_view():
         "amp_state": RolloutFieldSpec(
             shape=(_NUM_ENVS, _NUM_STEPS, 195), dtype="float32", time_axis=True
         ),
-        "collector_version": RolloutFieldSpec(
-            shape=(_NUM_ENVS,), dtype="int64", time_axis=False
-        ),
+        "collector_version": RolloutFieldSpec(shape=(_NUM_ENVS,), dtype="int64", time_axis=False),
     }
     owner = RolloutRingBuffer(
         num_envs=_NUM_ENVS,
