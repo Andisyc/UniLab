@@ -8,6 +8,7 @@ import torch
 
 import unilab.algos.torch.appo.runner as appo_runner_module
 from unilab.algos.torch.appo.runner import APPORunner
+from unilab.ipc import RolloutFieldSpec
 
 
 @pytest.fixture(autouse=True)
@@ -80,8 +81,10 @@ class _FakeRolloutRingBuffer:
         critic_dim: int,
         num_slots: int,
         create: bool,
+        extra_fields: dict[str, RolloutFieldSpec] | None = None,
     ) -> None:
         del num_envs, num_steps, obs_dim, action_dim, critic_dim, num_slots, create
+        self.extra_fields = dict(extra_fields or {})
         self.name = "fake-storage"
         self._write_ptr = object()
         self._read_ptr = object()
@@ -101,7 +104,21 @@ class _FakeRolloutRingBuffer:
             "truncated": (2, 4),
             "last_obs": (2, 4),
             "last_critic": (2, 7),
+            **{field: spec.shape for field, spec in self.extra_fields.items()},
         }
+
+    @property
+    def field_specs(self) -> dict[str, RolloutFieldSpec]:
+        specs = {
+            field: RolloutFieldSpec(
+                shape=shape,
+                time_axis=field not in {"last_obs", "last_critic"},
+            )
+            for field, shape in self.slot_shapes.items()
+            if field not in self.extra_fields
+        }
+        specs.update(self.extra_fields)
+        return specs
 
     def wait_for_data(self, timeout: float = 60.0) -> bool:
         del timeout
@@ -233,7 +250,7 @@ def test_appo_runner_uses_explicit_runtime_context(
     monkeypatch.setattr(appo_runner_module, "RolloutRingBuffer", _FakeRolloutRingBuffer)
     monkeypatch.setattr(appo_runner_module, "SharedWeightSync", _FakeWeightSync)
     monkeypatch.setattr(appo_runner_module, "OffPolicyLogger", _FakeLogger)
-    monkeypatch.setattr(appo_runner_module.torch, "save", lambda *args, **kwargs: None)
+    monkeypatch.setattr(appo_runner_module, "save_appo_checkpoint", lambda *args, **kwargs: None)
 
     runner = APPORunner(
         env_name="DummyEnv",
@@ -272,7 +289,7 @@ def test_appo_runner_restores_resume_checkpoint(monkeypatch: pytest.MonkeyPatch,
     monkeypatch.setattr(appo_runner_module, "SharedWeightSync", _FakeWeightSync)
     monkeypatch.setattr(appo_runner_module, "OffPolicyLogger", _FakeLogger)
     monkeypatch.setattr(appo_runner_module.torch, "load", lambda *args, **kwargs: checkpoint)
-    monkeypatch.setattr(appo_runner_module.torch, "save", lambda *args, **kwargs: None)
+    monkeypatch.setattr(appo_runner_module, "save_appo_checkpoint", lambda *args, **kwargs: None)
 
     runner = APPORunner(
         env_name="DummyEnv",
@@ -313,7 +330,7 @@ def test_appo_runner_logs_learner_timing_for_fps_inputs(
     monkeypatch.setattr(appo_runner_module, "SharedWeightSync", _FakeWeightSync)
     monkeypatch.setattr(appo_runner_module, "OffPolicyLogger", _FakeLogger)
     monkeypatch.setattr(appo_runner_module.mp, "get_context", lambda method: queue)
-    monkeypatch.setattr(appo_runner_module.torch, "save", lambda *args, **kwargs: None)
+    monkeypatch.setattr(appo_runner_module, "save_appo_checkpoint", lambda *args, **kwargs: None)
 
     fake_clock = _FakeClock([100.0, 100.0, 110.0, 120.0, 120.5, 121.0])
     monkeypatch.setattr(appo_runner_module.time, "time", fake_clock.time)
@@ -372,7 +389,7 @@ def test_appo_runner_stages_multiple_rollouts_without_runner_cat(
     monkeypatch.setattr(appo_runner_module, "SharedWeightSync", _FakeWeightSync)
     monkeypatch.setattr(appo_runner_module, "OffPolicyLogger", _FakeLogger)
     monkeypatch.setattr(appo_runner_module.mp, "get_context", lambda method: queue)
-    monkeypatch.setattr(appo_runner_module.torch, "save", lambda *args, **kwargs: None)
+    monkeypatch.setattr(appo_runner_module, "save_appo_checkpoint", lambda *args, **kwargs: None)
     monkeypatch.setattr(appo_runner_module.torch, "cat", fail_cat)
 
     fake_clock = _FakeClock([100.0, 100.0, 110.0, 120.0, 120.5, 121.0])
@@ -445,7 +462,7 @@ def test_appo_runner_fails_fast_when_collector_dies_during_wait(
     monkeypatch.setattr(appo_runner_module, "SharedWeightSync", _FakeWeightSync)
     monkeypatch.setattr(appo_runner_module, "OffPolicyLogger", _FakeLogger)
     monkeypatch.setattr(appo_runner_module.mp, "get_context", lambda method: queue)
-    monkeypatch.setattr(appo_runner_module.torch, "save", lambda *args, **kwargs: None)
+    monkeypatch.setattr(appo_runner_module, "save_appo_checkpoint", lambda *args, **kwargs: None)
 
     runner = APPORunner(
         env_name="DummyEnv",

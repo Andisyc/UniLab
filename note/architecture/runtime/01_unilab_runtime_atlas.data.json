@@ -116,10 +116,11 @@
           "summary": "拥有 observation reward command action done reset 与 task semantics",
           "owns": "NpEnv lifecycle task state observation groups reward terms 与 autoreset",
           "mustNot": "backend 不拥有 reward 与 policy observation scripts 不改写 env lifecycle",
-          "objects": ["NpEnvState", "obs_dict", "reward", "terminated", "truncated", "info"],
+          "objects": ["NpEnvState", "obs_dict", "G1AMPWalk", "final_observation.amp", "reward", "terminated", "truncated", "info"],
           "files": [
             {"id":"U-SRC-010","path":"src/unilab/base/np_env.py","sourceLine":104,"role":"NumPy env lifecycle","functions":["NpEnv.step()","NpEnv.reset()","NpEnv._reset_done_envs()"]},
-            {"id":"U-SRC-011","path":"src/unilab/envs/locomotion/g1/joystick.py","sourceLine":386,"role":"G1 locomotion task semantics","functions":["update_state()","apply_action()"]}
+            {"id":"U-SRC-011","path":"src/unilab/envs/locomotion/g1/joystick.py","sourceLine":386,"role":"G1 locomotion task semantics","functions":["update_state()","apply_action()"]},
+            {"id":"U-SRC-048","path":"src/unilab/envs/locomotion/g1/amp_walk.py","sourceLine":35,"role":"fixed-forward no-phase G1 AMP task","functions":["G1AMPWalkEnv._compute_obs()","G1AMPWalkEnv._compute_amp_observation()"]}
           ],
           "mainRoute": [
             "B1 apply_action(): policy action plus state -> backend control",
@@ -129,7 +130,7 @@
           ],
           "mainRouteTitles": ["解释 Policy Action", "推进 Physics", "生成 Env State", "处理 Done Reset"],
           "review": ["NpEnvState.obs 必须保持 dict", "reset 返回 obs_dict info_dict", "obs_groups_spec 与 learner dim 一致"],
-          "tests": ["S1 env contract", "S2 task observation reward", "S3 backend-env integration"],
+          "tests": ["S1 G1 AMP group/phase/terminal identity", "S1 env contract", "S2 task observation reward", "S3 backend-env integration"],
           "gap": "不同任务语义很多 但必须共享 NpEnv lifecycle"
         }
       ]
@@ -155,6 +156,12 @@
             {"id":"U-SRC-035","path":"src/unilab/algos/torch/distill/persistent_runtime.py","sourceLine":31,"role":"DAgger shared student lifecycle","functions":["PersistentDistillationRuntime.activate_checkpoint()","PersistentDistillationRuntime.collect()","PersistentDistillationRuntime.close()"]},
             {"id":"U-SRC-036","path":"src/unilab/algos/torch/distill/persistent_resources.py","sourceLine":20,"role":"DAgger exact resource cache and reset lifecycle","functions":["PersistentResourceCache.acquire()","PersistentResourceCache.run_request()","PersistentResourceCache.close()"]},
             {"id":"U-SRC-037","path":"src/unilab/algos/torch/distill/g1_persistent_worker.py","sourceLine":80,"role":"DAgger production G1 worker and HP-4a2a request observation owner","functions":["PersistentG1DistillationWorker.collect()","PersistentG1DistillationWorker.close()"]}
+            ,{"id":"U-SRC-043","path":"src/unilab/ipc/rollout_ring_buffer.py","sourceLine":26,"role":"typed APPO shared rollout transport","functions":["RolloutFieldSpec","RolloutRingBuffer.field_specs","RolloutRingBuffer.read_numpy_views()"]}
+            ,{"id":"U-SRC-044","path":"src/unilab/algos/torch/appo/staging.py","sourceLine":18,"role":"typed learner rollout staging","functions":["RolloutStagingPool.stage_numpy_views()","RolloutStagingPool.batch()"]}
+            ,{"id":"U-SRC-045","path":"src/unilab/algos/torch/appo/runner.py","sourceLine":205,"role":"APPO payload and collector specialization hooks","functions":["APPORunner._extra_rollout_field_specs()","APPORunner._collector_target_fn()","APPORunner._collector_runtime_kwargs()"]}
+            ,{"id":"U-SRC-050","path":"src/unilab/algos/torch/amp/runtime.py","sourceLine":13,"role":"owner-configured AMP APPO runtime resolver","functions":["resolve_amp_appo_runtime()"]}
+            ,{"id":"U-SRC-051","path":"src/unilab/algos/torch/amp/runner.py","sourceLine":13,"role":"AMP typed payload and learner specialization","functions":["AMPAPPORunner._extra_rollout_field_specs()","AMPAPPORunner._restore_learner_checkpoint()"]}
+            ,{"id":"U-SRC-052","path":"src/unilab/algos/torch/amp/worker.py","sourceLine":13,"role":"collector-only AMP transition writer","functions":["write_amp_rollout_payload()"]}
           ],
           "mainRoute": [
             "B1 runner setup: env spec plus cfg -> collector learner shared resources",
@@ -164,7 +171,7 @@
           ],
           "mainRouteTitles": ["创建运行资源", "采集 Transition", "传输训练数据", "传播错误并清理"],
           "review": ["collector 异常必须回传完整 traceback", "shared memory 预算与 cleanup 必须可证明"],
-          "tests": ["S1 IPC layout", "S2 collector failure propagation", "S2 DAgger persistent lifecycle and barrier", "S2 exact resource reuse/reset/cleanup", "S2 HP-4a2a request observations", "S1/S2 HP-4a2b collector observations", "S2/S3 HP-4a2c identity/artifact/resume", "S1/S2/S3 HP-4a2d workflow learner cleanup persistence", "S3 async runner integration", "S4 bounded G1 MuJoCo lifecycle"],
+          "tests": ["S2/S3 formal AMP spawn resume playback and isolation", "S1 typed IPC layout and dtype", "S2 spawned 195-D collector-to-staging payload", "S2 collector failure propagation", "S2 DAgger persistent lifecycle and barrier", "S2 exact resource reuse/reset/cleanup", "S2 HP-4a2a request observations", "S1/S2 HP-4a2b collector observations", "S2/S3 HP-4a2c identity/artifact/resume", "S1/S2/S3 HP-4a2d workflow learner cleanup persistence", "S3 async runner integration", "S4 bounded G1 MuJoCo lifecycle"],
           "gap": "DAgger runtime 已完成接入, E61/E65/E67 证明 NO_STABLE_SPEEDUP, HP-6/E86 production gate PASS; promotion deferred 且默认 legacy; 同步 PPO 与异步 off-policy storage 形态仍不同"
         },
         {
@@ -173,12 +180,15 @@
           "summary": "在 accelerator 上消费 rollout 或 replay 并更新 policy parameters",
           "owns": "network optimizer loss normalization mixed precision compile 与 update schedule",
           "mustNot": "learner 不直接访问 backend state 或重新定义 env observation contract",
-          "objects": ["BalancedLabelIndexPools", "minibatch", "actor critic", "optimizer", "loss metrics", "updated weights"],
+          "objects": ["BalancedLabelIndexPools", "WalkMotionDataset", "195-D AMP state", "AMPAPPOLearner", "frozen D_k", "minibatch", "actor critic", "optimizer", "loss metrics", "updated weights"],
           "files": [
             {"id":"U-SRC-015","path":"src/unilab/algos/torch/fast_sac/learner.py","sourceLine":356,"role":"Torch off-policy learner","functions":["learn()","update()"]},
             {"id":"U-SRC-016","path":"src/unilab/algos/mlx/ppo/ppo.py","sourceLine":1,"role":"MLX PPO learner","functions":[]},
             {"id":"U-SRC-017","path":"scripts/train_mlx_ppo.py","sourceLine":538,"role":"synchronous rollout update loop","functions":["main()"]}
             ,{"id":"U-SRC-040","path":"src/unilab/algos/torch/distill/offline.py","sourceLine":56,"role":"distillation invocation-local balanced staging and replay-budget owner","functions":["BalancedLabelIndexPools","required_balanced_replay_updates_for_labels()","run_offline_distillation_updates()"]}
+            ,{"id":"U-SRC-046","path":"src/unilab/algos/torch/amp/spec.py","sourceLine":13,"role":"canonical G1 13-body 195-D AMP state","functions":["build_amp_observation()"]}
+            ,{"id":"U-SRC-047","path":"src/unilab/algos/torch/amp/motion_dataset.py","sourceLine":49,"role":"fail-closed forward-walk expert owner","functions":["WalkMotionDataset.from_manifest()","WalkMotionDataset.sample()"]}
+            ,{"id":"U-SRC-049","path":"src/unilab/algos/torch/amp/learner.py","sourceLine":151,"role":"learner-only frozen-D AMP update owner","functions":["AMPAPPOLearner.process_batch()","AMPAPPOLearner.update()","AMPAPPOLearner.get_state_dict()"]}
           ],
           "mainRoute": [
             "B1 distillation staging or readiness guard: loaded dataset -> one immutable label-pool cache -> equivalent valid training batch",
@@ -188,7 +198,7 @@
           ],
           "mainRouteTitles": ["验证训练就绪", "计算模型张量", "更新 Policy", "发布新权重"],
           "review": ["shape normalization checkpoint contract 与 env spec 一致", "更新频率不能绕过 runner lifecycle"],
-          "tests": ["S1 HP-7c pool identity/RNG/memory contracts", "S1 loss update", "S2 distillation formal offline integration", "S2 runner learner connectivity", "S3/S4 HP-7c bounded live pending"],
+          "tests": ["S1/S2 frozen-D AMP reward V-trace ordering and checkpoint", "S1 AMP forward-only manifest and 195-D source parity", "S1 HP-7c pool identity/RNG/memory contracts", "S1 loss update", "S2 distillation formal offline integration", "S2 runner learner connectivity", "S3/S4 HP-7c bounded live pending"],
           "gap": "HP-7c cache owner/S1/S2 and E95 production-path CUDA staging sentinel pass; bounded persistent end-to-end evidence pending; 各算法 update 公式不同但 runtime ownership 相同"
         }
       ]

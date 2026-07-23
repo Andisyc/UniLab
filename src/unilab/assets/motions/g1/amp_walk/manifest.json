@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "motion_class": "forward_walk",
+  "source_repository": "AMP_mjlab",
+  "source_relative_directory": "src/assets/motions/g1/amp/WalkandRun",
+  "body_names": [
+    "pelvis",
+    "left_hip_roll_link",
+    "left_knee_link",
+    "left_ankle_roll_link",
+    "right_hip_roll_link",
+    "right_knee_link",
+    "right_ankle_roll_link",
+    "left_shoulder_roll_link",
+    "left_elbow_link",
+    "left_wrist_yaw_link",
+    "right_shoulder_roll_link",
+    "right_elbow_link",
+    "right_wrist_yaw_link"
+  ],
+  "body_indices": [0, 2, 4, 6, 8, 10, 12, 17, 19, 22, 24, 26, 29],
+  "anchor_body_name": "torso_link",
+  "anchor_body_index": 15,
+  "motions": [
+    {
+      "file": "walk_forward_loop_002__A022.npz",
+      "sha256": "dc1eba2d7f124d99d058562072a2376bcf123ec52b7c2b565abd723c3f688e1f",
+      "frames": 455,
+      "fps": 50.0
+    },
+    {
+      "file": "walk_forward_loop_002__A024.npz",
+      "sha256": "25149b69debf5f015379ead46ed1e709cb052e96dbf974865ea2e2a66bf1be0f",
+      "frames": 482,
+      "fps": 50.0
+    }
+  ]
+}

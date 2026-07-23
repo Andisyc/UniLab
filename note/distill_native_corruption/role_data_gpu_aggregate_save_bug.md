@@ -512,5 +512,23 @@ Expected decisive outcomes:
 - SOURCE_ANNOTATE_FAILED: identifies the concrete pending source path and label head.
 - AGGREGATE_FAILED: source-level annotation passed, but full concat/build failed.
 - PASS: files/schema are clean; the original failure then points to runtime mutation,
-  server code identity drift, or a source-list mismatch in the live process.
+ server code identity drift, or a source-list mismatch in the live process.
+```
+
+## 2026-07-22: ownerfix-r4 resolution pointer
+
+The later successful repair path is recorded separately in:
+
+```text
+note/distill_native_corruption/ownerfix_r4_resolution.md
+```
+
+Summary:
+
+```text
+Role/scenario artifact metadata became owner truth.
+Dataset and checkpoint writes became atomic.
+Checkpoints became CPU-owned cold artifacts.
+DAgger iteration checkpoints stopped saving/resuming optimizer state.
+g1-walk-stand-ownerfix-r4 completed formal DAgger iteration 8.
 ```

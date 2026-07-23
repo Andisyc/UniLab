@@ -5,6 +5,7 @@ import pytest
 import torch
 
 from unilab.algos.torch.appo.staging import RolloutStagingPool
+from unilab.ipc.rollout_ring_buffer import RolloutFieldSpec
 
 _NUM_ENVS = 2
 _NUM_STEPS = 3
@@ -105,3 +106,36 @@ def test_staging_pool_rejects_empty_capacity() -> None:
             slot_shapes=_SLOT_SHAPES,
             device="cpu",
         )
+
+
+def test_staging_pool_preserves_extra_field_dtype_and_time_semantics() -> None:
+    field_specs = {
+        "amp_state": RolloutFieldSpec(
+            shape=(_NUM_ENVS, _NUM_STEPS, 195), dtype="float16", time_axis=True
+        ),
+        "collector_version": RolloutFieldSpec(
+            shape=(_NUM_ENVS,), dtype="int64", time_axis=False
+        ),
+    }
+    pool = RolloutStagingPool(
+        capacity=2,
+        num_envs=_NUM_ENVS,
+        field_specs=field_specs,
+        device="cpu",
+    )
+
+    pool.stage_numpy_views(
+        {
+            "amp_state": np.full(
+                (_NUM_ENVS, _NUM_STEPS, 195), 2.5, dtype=np.float16
+            ),
+            "collector_version": np.arange(_NUM_ENVS, dtype=np.int64),
+        }
+    )
+    batch = pool.batch()
+
+    assert batch["amp_state"].shape == (_NUM_STEPS, _NUM_ENVS, 195)
+    assert batch["amp_state"].dtype == torch.float16
+    assert torch.all(batch["amp_state"] == 2.5)
+    assert batch["collector_version"].shape == (_NUM_ENVS,)
+    assert batch["collector_version"].dtype == torch.int64

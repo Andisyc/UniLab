@@ -12,6 +12,9 @@ const methodToCode = JSON.parse(
 const methodFigure = JSON.parse(
   fs.readFileSync("../../concept/03_g1_multiteacher_distillation_method.data.json", "utf8"),
 );
+const ampMethodFigure = JSON.parse(
+  fs.readFileSync("../../concept/04_amp_walk_async_method.data.json", "utf8"),
+);
 
 if (typeof rough.svg !== "function") {
   throw new Error("roughjs import succeeded but rough.svg is missing");
@@ -66,6 +69,12 @@ if (methodToCode.layout !== "repository_reading_atlas") {
 }
 if (methodFigure.layout !== "method_figure") {
   throw new Error("distillation Concept Figure must use method_figure");
+}
+if (ampMethodFigure.layout !== "method_figure") {
+  throw new Error("AMP Walk Concept Figure must use method_figure");
+}
+if (!indexHtml.includes("../../concept/04_amp_walk_async_method.data.json")) {
+  throw new Error("Atlas index must expose the AMP Walk Concept Figure");
 }
 
 console.log("roughjs viewer import and UniLab atlas data contracts OK");

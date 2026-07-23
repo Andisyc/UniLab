@@ -12,15 +12,18 @@ import sys
 import time
 from collections import deque
 from copy import deepcopy
+from math import prod
 from typing import Any
 
+import numpy as np
 import torch
 from rsl_rl.utils import resolve_callable
 
+from unilab.algos.torch.appo.checkpoint import load_appo_checkpoint, save_appo_checkpoint
 from unilab.algos.torch.appo.learner import APPOLearner
 from unilab.algos.torch.appo.staging import RolloutStagingPool
 from unilab.algos.torch.appo.worker import appo_collector_fn
-from unilab.ipc import AsyncRunner, RolloutRingBuffer, SharedWeightSync
+from unilab.ipc import AsyncRunner, RolloutFieldSpec, RolloutRingBuffer, SharedWeightSync
 from unilab.logging import OffPolicyLogger
 from unilab.training.seed import apply_training_seed, derive_worker_seed
 from unilab.utils.nan_guard import NanGuardCfg
@@ -169,7 +172,7 @@ class APPORunner(AsyncRunner):
 
         # Extract algorithm hyperparams from rl_cfg["algorithm"] (or top-level)
         algo_cfg = cfg.get("algorithm", cfg)
-        learner = APPOLearner(
+        learner = self._learner_class()(
             actor=actor,
             critic=critic,
             device=self.device,
@@ -193,11 +196,38 @@ class APPORunner(AsyncRunner):
             vtrace_clip_rho=algo_cfg.get("vtrace_clip_rho", 1.0),
             vtrace_clip_c=algo_cfg.get("vtrace_clip_c", 1.0),
             enable_compile=algo_cfg.get("enable_compile", True),
+            **self._learner_extra_kwargs(),
         )
         return learner
 
+    def _learner_class(self):
+        return APPOLearner
+
+    def _learner_extra_kwargs(self) -> dict[str, Any]:
+        return {}
+
+    def _restore_learner_checkpoint(
+        self, learner: APPOLearner, checkpoint: dict[str, Any]
+    ) -> None:
+        learner.actor.load_state_dict(checkpoint["actor"])
+        learner.critic.load_state_dict(checkpoint["critic"])
+        if "optimizer" in checkpoint:
+            learner.optimizer.load_state_dict(checkpoint["optimizer"])
+            learner.learning_rate = _optimizer_lr_from_state(learner.optimizer)
+        _sync_resume_target_actor(learner)
+
     def _collector_fn(self, stop_event, **kwargs):
         appo_collector_fn(stop_event=stop_event, **kwargs)
+
+    def _extra_rollout_field_specs(self) -> dict[str, RolloutFieldSpec]:
+        """Declare optional per-slot collector payload owned by a specialized runtime."""
+        return {}
+
+    def _collector_target_fn(self):
+        return appo_collector_fn
+
+    def _collector_runtime_kwargs(self) -> dict[str, Any]:
+        return {}
 
     def learn(
         self,
@@ -215,16 +245,17 @@ class APPORunner(AsyncRunner):
 
         learner = self._build_learner()
         if self.resume_path:
-            checkpoint = torch.load(self.resume_path, map_location=self.device, weights_only=True)
-            learner.actor.load_state_dict(checkpoint["actor"])
-            learner.critic.load_state_dict(checkpoint["critic"])
-            if "optimizer" in checkpoint:
-                learner.optimizer.load_state_dict(checkpoint["optimizer"])
-                learner.learning_rate = _optimizer_lr_from_state(learner.optimizer)
-            _sync_resume_target_actor(learner)
+            checkpoint = load_appo_checkpoint(self.resume_path, device=self.device)
+            self._restore_learner_checkpoint(learner, checkpoint)
 
         # --- memory budget check ---
         from unilab.ipc.memory_budget import estimate_appo_bytes, warn_if_over_budget
+
+        extra_rollout_fields = self._extra_rollout_field_specs()
+        extra_bytes_per_slot = sum(
+            prod(spec.shape) * np.dtype(spec.dtype).itemsize
+            for spec in extra_rollout_fields.values()
+        )
 
         mem_est = estimate_appo_bytes(
             num_envs=self.num_envs,
@@ -233,6 +264,7 @@ class APPORunner(AsyncRunner):
             action_dim=self.action_dim,
             critic_dim=self.critic_dim,
             num_slots=4,
+            extra_bytes_per_slot=extra_bytes_per_slot,
         )
         warn_if_over_budget(mem_est, label="APPO")
 
@@ -246,6 +278,7 @@ class APPORunner(AsyncRunner):
             critic_dim=self.critic_dim,
             num_slots=4,
             create=True,
+            extra_fields=extra_rollout_fields,
         )
         self._shared_resources.append(rollout_ring_buffer)
 
@@ -266,6 +299,7 @@ class APPORunner(AsyncRunner):
         }
 
         metrics_queue: mp.Queue = mp.get_context("spawn").Queue(maxsize=100)
+        self._shared_resources.append(metrics_queue)
 
         # Start collector
         collector_kwargs = {
@@ -291,9 +325,11 @@ class APPORunner(AsyncRunner):
             "env_cfg_override": self.env_cfg_overrides if self.env_cfg_overrides else None,
             "seed": derive_worker_seed(self.seed, worker_index=0),
             "nan_guard_cfg": self.nan_guard_cfg,
+            "extra_rollout_fields": extra_rollout_fields,
+            **self._collector_runtime_kwargs(),
         }
         self._start_collector(
-            target_fn=appo_collector_fn,
+            target_fn=self._collector_target_fn(),
             kwargs={"stop_event": self._stop_event, **collector_kwargs},
         )
 
@@ -323,7 +359,7 @@ class APPORunner(AsyncRunner):
         staging_pool = RolloutStagingPool(
             capacity=self.staging_pool_size,
             num_envs=self.num_envs,
-            slot_shapes=rollout_ring_buffer.slot_shapes,
+            field_specs=rollout_ring_buffer.field_specs,
             device=self.device,
         )
 
@@ -420,11 +456,11 @@ class APPORunner(AsyncRunner):
 
             if save_interval > 0 and iteration % save_interval == 0:
                 ckpt_path = os.path.join(log_dir, f"model_{iteration}.pt")
-                torch.save(learner.get_state_dict(), ckpt_path)
+                save_appo_checkpoint(ckpt_path, learner.get_state_dict())
                 logger.log_save(ckpt_path)
 
         ckpt_path = os.path.join(log_dir, f"model_{max_iterations}.pt")
-        torch.save(learner.get_state_dict(), ckpt_path)
+        save_appo_checkpoint(ckpt_path, learner.get_state_dict())
         logger.log_save(ckpt_path)
         logger.finish()
         summary = {

@@ -7,6 +7,8 @@ from collections.abc import Mapping
 import numpy as np
 import torch
 
+from unilab.ipc.rollout_ring_buffer import RolloutFieldSpec
+
 _LAST_FIELDS = frozenset({"last_obs", "last_critic"})
 _FIELD_ALIASES = {
     "obs": "observations",
@@ -27,8 +29,9 @@ class RolloutStagingPool:
         *,
         capacity: int,
         num_envs: int,
-        slot_shapes: Mapping[str, tuple[int, ...]],
         device: str | torch.device,
+        slot_shapes: Mapping[str, tuple[int, ...]] | None = None,
+        field_specs: Mapping[str, RolloutFieldSpec] | None = None,
     ) -> None:
         if capacity < 1:
             raise ValueError("RolloutStagingPool capacity must be >= 1")
@@ -44,9 +47,30 @@ class RolloutStagingPool:
         self._slot_versions = [-1] * self.capacity
         self._raw_to_batch_field: dict[str, str] = {}
         self._buffers: dict[str, torch.Tensor] = {}
+        self._time_axis_fields: set[str] = set()
+        self._field_dtypes: dict[str, np.dtype] = {}
 
-        for raw_field, slot_shape in slot_shapes.items():
-            self._allocate_field(raw_field, tuple(slot_shape))
+        if (slot_shapes is None) == (field_specs is None):
+            raise ValueError("provide exactly one of slot_shapes or field_specs")
+        if field_specs is not None:
+            for raw_field, spec in field_specs.items():
+                if not isinstance(spec, RolloutFieldSpec):
+                    raise TypeError(f"field spec for {raw_field!r} must use RolloutFieldSpec")
+                self._allocate_field(
+                    raw_field,
+                    spec.shape,
+                    dtype=np.dtype(spec.dtype),
+                    time_axis=spec.time_axis,
+                )
+        else:
+            assert slot_shapes is not None
+            for raw_field, slot_shape in slot_shapes.items():
+                self._allocate_field(
+                    raw_field,
+                    tuple(slot_shape),
+                    dtype=np.dtype(np.float32),
+                    time_axis=raw_field not in _LAST_FIELDS,
+                )
 
     @property
     def active_count(self) -> int:
@@ -56,7 +80,14 @@ class RolloutStagingPool:
     def slot_versions(self) -> tuple[int, ...]:
         return tuple(self._slot_versions)
 
-    def _allocate_field(self, raw_field: str, slot_shape: tuple[int, ...]) -> None:
+    def _allocate_field(
+        self,
+        raw_field: str,
+        slot_shape: tuple[int, ...],
+        *,
+        dtype: np.dtype,
+        time_axis: bool,
+    ) -> None:
         if not slot_shape or slot_shape[0] != self.num_envs:
             raise ValueError(
                 f"rollout field {raw_field!r} must start with num_envs={self.num_envs}; "
@@ -65,10 +96,11 @@ class RolloutStagingPool:
 
         batch_field = _FIELD_ALIASES.get(raw_field, raw_field)
         self._raw_to_batch_field[raw_field] = batch_field
+        self._field_dtypes[raw_field] = dtype
+        if time_axis:
+            self._time_axis_fields.add(raw_field)
 
-        if raw_field in _LAST_FIELDS:
-            combined_shape = (self.capacity * self.num_envs, *slot_shape[1:])
-        else:
+        if time_axis:
             if len(slot_shape) < 2:
                 raise ValueError(f"rollout field {raw_field!r} must include a time dimension")
             combined_shape = (
@@ -76,9 +108,11 @@ class RolloutStagingPool:
                 self.capacity * self.num_envs,
                 *slot_shape[2:],
             )
+        else:
+            combined_shape = (self.capacity * self.num_envs, *slot_shape[1:])
         self._buffers[batch_field] = torch.empty(
             combined_shape,
-            dtype=torch.float32,
+            dtype=torch.from_numpy(np.empty((), dtype=dtype)).dtype,
             device=self.device,
         )
 
@@ -87,9 +121,9 @@ class RolloutStagingPool:
         storage = self._buffers[batch_field]
         start = slot * self.num_envs
         end = start + self.num_envs
-        if raw_field in _LAST_FIELDS:
-            return storage[start:end]
-        return storage[:, start:end, ...]
+        if raw_field in self._time_axis_fields:
+            return storage[:, start:end, ...]
+        return storage[start:end]
 
     def stage_numpy_views(self, raw_views: Mapping[str, np.ndarray]) -> int:
         """Copy one raw shared-memory rollout into the next staging slot."""
@@ -101,11 +135,14 @@ class RolloutStagingPool:
         for raw_field, raw_view in raw_views.items():
             if raw_field not in self._raw_to_batch_field:
                 raise KeyError(f"unexpected rollout field {raw_field!r}")
-            if raw_view.dtype != np.float32:
-                raise TypeError(f"rollout field {raw_field!r} must be float32")
+            expected_dtype = self._field_dtypes[raw_field]
+            if raw_view.dtype != expected_dtype:
+                raise TypeError(
+                    f"rollout field {raw_field!r} must be {expected_dtype}, got {raw_view.dtype}"
+                )
 
             src = torch.from_numpy(raw_view)
-            if raw_field not in _LAST_FIELDS:
+            if raw_field in self._time_axis_fields:
                 src = src.transpose(0, 1)
 
             dst = self._slot_view(raw_field, slot)
@@ -129,9 +166,10 @@ class RolloutStagingPool:
 
         active_envs = self._active_count * self.num_envs
         out: dict[str, torch.Tensor] = {}
-        for field, storage in self._buffers.items():
-            if field in _LAST_FIELDS:
-                out[field] = storage[:active_envs]
+        for raw_field, batch_field in self._raw_to_batch_field.items():
+            storage = self._buffers[batch_field]
+            if raw_field in self._time_axis_fields:
+                out[batch_field] = storage[:, :active_envs, ...]
             else:
-                out[field] = storage[:, :active_envs, ...]
+                out[batch_field] = storage[:active_envs]
         return out

@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import multiprocessing as mp
+
 import numpy as np
 import pytest
 import torch
 
-from unilab.ipc.rollout_ring_buffer import RolloutRingBuffer
+from unilab.algos.torch.appo.staging import RolloutStagingPool
+from unilab.ipc.rollout_ring_buffer import RolloutFieldSpec, RolloutRingBuffer
 
 _NUM_ENVS = 4
 _NUM_STEPS = 10
@@ -24,6 +27,27 @@ _EXPECTED_FIELDS = {
     "truncated",
     "last_obs",
 }
+
+
+def _write_amp_payload_from_spawned_process(
+    shm_names: dict[str, str], sync_primitives: tuple, extra_fields: dict
+) -> None:
+    attached = RolloutRingBuffer(
+        num_envs=_NUM_ENVS,
+        num_steps=_NUM_STEPS,
+        obs_dim=_OBS_DIM,
+        action_dim=_ACTION_DIM,
+        num_slots=_NUM_SLOTS,
+        create=False,
+        shm_name_prefix=shm_names,
+        extra_fields=extra_fields,
+    )
+    try:
+        attached.attach_sync_primitives(*sync_primitives)
+        attached.write_buffer["amp_state"][:] = 7.25
+        attached.signal_write_done()
+    finally:
+        attached.close()
 
 
 def _make_ring_buffer(num_slots: int = _NUM_SLOTS) -> RolloutRingBuffer:
@@ -170,7 +194,15 @@ def test_write_buffer_returns_dict_of_arrays():
 def test_close_does_not_raise():
     """close() (attach-mode teardown, no unlink) must not raise."""
     s = _make_ring_buffer()
+    shm_names = tuple(s.name.values())
     s.close()
+    s.cleanup()
+
+    from multiprocessing import shared_memory
+
+    for shm_name in shm_names:
+        with pytest.raises(FileNotFoundError):
+            shared_memory.SharedMemory(name=shm_name, create=False)
 
 
 def test_attach_create_false_reads_same_data():
@@ -239,3 +271,106 @@ def test_ring_buffer_ipc_contract_has_no_privileged_fields():
 
     assert "priv_info" not in _FIELD_SHAPES
     assert "last_priv_info" not in _FIELD_SHAPES
+
+
+def test_ring_buffer_extra_typed_fields_roundtrip_through_attached_view():
+    extra_fields = {
+        "amp_state": RolloutFieldSpec(
+            shape=(_NUM_ENVS, _NUM_STEPS, 195), dtype="float32", time_axis=True
+        ),
+        "collector_version": RolloutFieldSpec(
+            shape=(_NUM_ENVS,), dtype="int64", time_axis=False
+        ),
+    }
+    owner = RolloutRingBuffer(
+        num_envs=_NUM_ENVS,
+        num_steps=_NUM_STEPS,
+        obs_dim=_OBS_DIM,
+        action_dim=_ACTION_DIM,
+        num_slots=_NUM_SLOTS,
+        create=True,
+        extra_fields=extra_fields,
+    )
+    owner.write_buffer["amp_state"][:] = 3.5
+    owner.write_buffer["collector_version"][:] = np.arange(_NUM_ENVS)
+    owner.signal_write_done()
+
+    attached = RolloutRingBuffer(
+        num_envs=_NUM_ENVS,
+        num_steps=_NUM_STEPS,
+        obs_dim=_OBS_DIM,
+        action_dim=_ACTION_DIM,
+        num_slots=_NUM_SLOTS,
+        create=False,
+        shm_name_prefix=owner.name,
+        extra_fields=extra_fields,
+    )
+    attached.attach_sync_primitives(owner._write_ptr, owner._read_ptr)
+    views = attached.read_numpy_views()
+
+    assert views["amp_state"].dtype == np.float32
+    assert views["amp_state"].shape == (_NUM_ENVS, _NUM_STEPS, 195)
+    assert np.all(views["amp_state"] == 3.5)
+    assert views["collector_version"].dtype == np.int64
+    np.testing.assert_array_equal(views["collector_version"], np.arange(_NUM_ENVS))
+
+    attached.close()
+    owner.cleanup()
+
+
+def test_ring_buffer_rejects_extra_field_collision():
+    with pytest.raises(ValueError, match="collides"):
+        RolloutRingBuffer(
+            num_envs=_NUM_ENVS,
+            num_steps=_NUM_STEPS,
+            obs_dim=_OBS_DIM,
+            action_dim=_ACTION_DIM,
+            create=True,
+            extra_fields={
+                "obs": RolloutFieldSpec(
+                    shape=(_NUM_ENVS, _NUM_STEPS, 1),
+                    dtype="float32",
+                    time_axis=True,
+                )
+            },
+        )
+
+
+def test_spawned_collector_payload_reaches_learner_staging():
+    extra_fields = {
+        "amp_state": RolloutFieldSpec(
+            shape=(_NUM_ENVS, _NUM_STEPS, 195), dtype="float32", time_axis=True
+        )
+    }
+    owner = RolloutRingBuffer(
+        num_envs=_NUM_ENVS,
+        num_steps=_NUM_STEPS,
+        obs_dim=_OBS_DIM,
+        action_dim=_ACTION_DIM,
+        num_slots=_NUM_SLOTS,
+        create=True,
+        extra_fields=extra_fields,
+    )
+    try:
+        ctx = mp.get_context("spawn")
+        process = ctx.Process(
+            target=_write_amp_payload_from_spawned_process,
+            args=(owner.name, (owner._write_ptr, owner._read_ptr), extra_fields),
+        )
+        process.start()
+        process.join(timeout=10.0)
+        assert process.exitcode == 0
+        assert owner.wait_for_data(timeout=1.0)
+
+        staging = RolloutStagingPool(
+            capacity=1,
+            num_envs=_NUM_ENVS,
+            field_specs=owner.field_specs,
+            device="cpu",
+        )
+        staging.stage_numpy_views(owner.read_numpy_views())
+        learner_batch = staging.batch()
+        assert learner_batch["amp_state"].shape == (_NUM_STEPS, _NUM_ENVS, 195)
+        assert torch.all(learner_batch["amp_state"] == 7.25)
+    finally:
+        owner.cleanup()

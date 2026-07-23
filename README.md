@@ -68,15 +68,17 @@ make setup-motrix
 uv run demo dance
 ```
 
-## 🏃 Training Cmd
+## 🏃 Training
 
 ```bash
+# vanilla command
 uv run train --algo sac --task g1_walk_flat --sim mujoco
 ```
 
-## 🏃 Sim2Sim Cmd
+## 🏃 Sim2Sim
 
 ```bash
+# vanilla command
 uv run scripts/play_interactive.py \
   --algo sac \
   --task g1_walk_flat \
@@ -84,13 +86,21 @@ uv run scripts/play_interactive.py \
 ```
 
 ```bash
+# quick command
+./start.sh --algo distill --task g1_walk_flat \
+  --checkpoint-path /path/to/checkpoint/dagger_iteration_8.pt
+```
+
+```bash
+# with diagnoisis
 UNILAB_G1_ACTION_TRACE=1 UNILAB_G1_ACTION_TRACE_INTERVAL=20 \
 ./start.sh g1_stand_still 2026-07-09_22-02-36_mujoco
 ```
 
+## 🏃 Sim2Real
+
 ```bash
-./start.sh --algo distill --task g1_walk_flat \
-  --checkpoint-path /path/to/checkpoint/dagger_iteration_8.pt
+# See RoboJuDo
 ```
 
 ## 📚 Documentation

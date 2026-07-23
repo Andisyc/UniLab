@@ -1,0 +1,89 @@
+{
+  "title": "04 AMP Walk-Only Async Training",
+  "layout": "method_figure",
+  "figureWidth": 1350,
+  "figureHeight": 720,
+  "connectorClearance": 18,
+  "showLegend": false,
+  "concepts": {
+    "C-AW-EXPERT": { "name": "Expert Motion", "color": "#2563eb" },
+    "C-AW-POLICY": { "name": "Policy Motion", "color": "#0891b2" },
+    "C-AW-STYLE": { "name": "AMP Style", "color": "#be123c" },
+    "C-AW-LEARN": { "name": "Async Policy Learning", "color": "#15803d" }
+  },
+  "zones": [],
+  "nodes": [
+    {
+      "id": "AW-M-01",
+      "design_id": "AMP-WALK-DP-01",
+      "contract_id": "AMP-WALK-METHOD-v001",
+      "contract_anchor": "walk-expert-transitions",
+      "title": "Walk Expert Transitions",
+      "summary": "仅以前进行走动作序列定义人类步态正样本",
+      "concept": "C-AW-EXPERT",
+      "x": 60, "y": 100, "w": 260, "h": 110
+    },
+    {
+      "id": "AW-M-02",
+      "design_id": "AMP-WALK-DP-02",
+      "contract_id": "AMP-WALK-METHOD-v001",
+      "contract_anchor": "policy-walk-transitions",
+      "title": "Policy Walk Transitions",
+      "summary": "异步采样策略生成的当前与下一身体状态",
+      "concept": "C-AW-POLICY",
+      "x": 60, "y": 430, "w": 260, "h": 110
+    },
+    {
+      "id": "AW-M-03",
+      "design_id": "AMP-WALK-DP-03",
+      "contract_id": "AMP-WALK-METHOD-v001",
+      "contract_anchor": "amp-style-discriminator",
+      "title": "AMP Style Discriminator",
+      "summary": "冻结的 D_k 比较专家与策略 transition 并产生风格奖励",
+      "concept": "C-AW-STYLE",
+      "x": 530, "y": 250, "w": 280, "h": 120
+    },
+    {
+      "id": "AW-M-04",
+      "design_id": "AMP-WALK-DP-04",
+      "contract_id": "AMP-WALK-METHOD-v001",
+      "contract_anchor": "amp-regularized-walking-policy",
+      "title": "AMP-Regularized Walking Policy",
+      "summary": "固定前进任务信号与 AMP 奖励共同进入 V-trace",
+      "concept": "C-AW-LEARN",
+      "x": 990, "y": 250, "w": 290, "h": 120
+    }
+  ],
+  "edges": [
+    {
+      "from": "AW-M-01", "to": "AW-M-03", "label": "专家正样本", "concept": "C-AW-EXPERT", "route": "upper",
+      "fromAnchor": "bottom", "toAnchor": "top",
+      "via": [[190, 230], [670, 230]],
+      "labelX": 420, "labelY": 230,
+      "labelDx": 0, "labelDy": -12
+    },
+    {
+      "from": "AW-M-02", "to": "AW-M-03", "label": "策略样本", "concept": "C-AW-POLICY", "route": "lower",
+      "fromAnchor": "top", "toAnchor": "bottom",
+      "via": [[190, 400], [670, 400]],
+      "labelX": 420, "labelY": 400,
+      "labelDx": 0, "labelDy": 18
+    },
+    {
+      "from": "AW-M-03", "to": "AW-M-04", "label": "D_k 风格奖励", "concept": "C-AW-STYLE", "route": "spine",
+      "fromAnchor": "right", "toAnchor": "left",
+      "labelDx": 0, "labelDy": -14
+    },
+    {
+      "from": "AW-M-04", "to": "AW-M-02", "label": "更新策略继续异步 rollout", "concept": "C-AW-LEARN", "route": "feedback",
+      "fromAnchor": "bottom", "toAnchor": "right",
+      "via": [[1135, 600], [400, 600], [400, 485]],
+      "labelX": 760, "labelY": 600,
+      "labelDx": 0, "labelDy": -12,
+      "kind": "feedback"
+    }
+  ],
+  "callouts": [],
+  "acceptance": []
+}
+

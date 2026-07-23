@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime
+import json
 import os
 import sys
 from collections.abc import Callable
@@ -430,10 +431,14 @@ def main(cfg: DictConfig) -> None:
                     log_dir=log_dir,
                     logger_type=cfg.training.logger,
                 )
-                if tracker is not None:
-                    tracker.update_summary(getattr(runner, "last_run_summary", None))
             finally:
-                runner.close()
+                close_report = runner.close()
+                summary = dict(getattr(runner, "last_run_summary", {}) or {})
+                summary["lifecycle_close"] = close_report
+                runner.last_run_summary = summary
+                print(f"[APPO LIFECYCLE] {json.dumps(close_report, sort_keys=True)}")
+                if tracker is not None:
+                    tracker.update_summary(summary)
 
         if should_run_playback(
             play_only=cfg.training.play_only,

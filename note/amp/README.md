@@ -1,6 +1,7 @@
 # AMP-Only Async Walking Control Room
 
-Status: `Stage 1 contract proposal`; no active AMP contract or AMP Concept Figure exists yet.
+Status: `Steps 1-7 complete`; local MPS performance gate failed and Step 8 is
+not authorized.
 
 This directory governs the proposed migration of walk-only AMP training from
 `/Users/chengyuxuan/ArtiIntComVis/AMP_mjlab` into UniLab's asynchronous APPO
@@ -11,6 +12,8 @@ role or a hidden extension of the active multi-teacher method.
 
 - migrate human-like **walking** AMP only;
 - use UniLab's asynchronous collector/learner architecture;
+- make Phase 1 a migration-correctness sentinel with one fixed nonzero forward
+  walking objective; standing still is not a required skill or acceptance item;
 - exclude running, fall recovery, delayed termination, recovery reset, and
   motion-reset curriculum;
 - exclude explicit gait-phase observation, gait-phase reward, contact schedule,
@@ -18,29 +21,30 @@ role or a hidden extension of the active multi-teacher method.
 - retain only the minimum task reward needed to specify commanded locomotion and
   physical viability;
 - train a deployable actor; the discriminator remains training-only.
+- defer AMP plus the current multi-teacher distillation workflow to Phase 2;
+  that integration requires a separate design/contract pass and must not enter
+  the Phase 1 runtime.
 
 ## Default Read Path
 
-1. [Contract and migration proposal](plans/amp_async_walk_migration_proposal.md)
-2. [Static migration evidence](evidence/2026-07-21-static-migration-baseline.md)
-3. [Current task canvas](task_canvas.md)
+1. [Active contract registry](contracts/README.md)
+2. [AMP Walk Concept Figure](../architecture/concept/04_amp_walk_async_method.data.json)
+3. [Current engineering plan](plans/current_engineering_plan.md)
+4. [Current acceptance checklist](checklists/current.md)
+5. [Static migration evidence](evidence/2026-07-21-static-migration-baseline.md)
+6. [Distillation lifecycle impact review](evidence/2026-07-22-distill-lifecycle-impact-review.md)
+7. [Current task canvas](task_canvas.md)
 
 ## Governance State
 
-The active UniLab Concept Figure is currently the G1 multi-teacher distillation
-method. It contains no AMP design point. This is a `figure-mismatch`, not a
-reason to reuse distillation IDs or contracts.
+The AMP method now has its own active `AMP-WALK` method/training contracts and
+Concept Figure. It remains separate from the active multi-teacher distillation
+method. Planned implementation owners stay in the engineering plan until code
+exists; no AMP Method-to-Code or Runtime Atlas is presented as implemented.
 
-After the human confirms the proposed AMP semantics, the next governed actions
-are:
-
-1. create an active `AMP-WALK` method/training contract;
-2. add a separate AMP Concept Figure and Design Point Register;
-3. refresh the repository/runtime Architecture with planned owner boundaries;
-4. promote the provisional step map into the current engineering plan and
-   checklist;
-5. only then begin implementation.
+The current cursor is Step 1 / 8, pending explicit implementation authority.
+The accepted document activation does not authorize code changes, tests,
+simulator startup, checkpoint IO, or training.
 
 No speedup or policy-quality claim is active. The target of reaching a useful
 walking policy within roughly 10-20 minutes is a live acceptance hypothesis.
-

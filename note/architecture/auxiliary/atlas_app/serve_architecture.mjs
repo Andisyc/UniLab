@@ -139,5 +139,6 @@ server.listen(port, "127.0.0.1", () => {
 console.log(`01 UniLab runtime: http://127.0.0.1:${port}/auxiliary/atlas_app/architecture_atlas.html?data=../../runtime/01_unilab_runtime_atlas.data.json`);
 console.log(`02 Method-to-code: http://127.0.0.1:${port}/auxiliary/atlas_app/architecture_atlas.html?data=../../architecture/02_g1_distillation_method_to_code.data.json`);
 console.log(`03 Concept figure: http://127.0.0.1:${port}/auxiliary/atlas_app/architecture_atlas.html?data=../../concept/03_g1_multiteacher_distillation_method.data.json`);
+console.log(`04 AMP walk concept: http://127.0.0.1:${port}/auxiliary/atlas_app/architecture_atlas.html?data=../../concept/04_amp_walk_async_method.data.json`);
   console.log(`Watching data folders: architecture/, runtime/, concept/`);
 });

@@ -83,6 +83,14 @@ class AsyncRunner(ABC):
         self._shared_resources: list = []
         self._error_recv: Any = None
         self._error_send: Any = None
+        self._closed = False
+        self.last_close_report: dict[str, Any] = {
+            "state": "pending",
+            "collector_exitcode": None,
+            "collector_terminated": False,
+            "resource_count": 0,
+            "errors": [],
+        }
 
     @abstractmethod
     def _get_default_device(self) -> str:
@@ -138,13 +146,19 @@ class AsyncRunner(ABC):
         exitcode = getattr(self._collector_process, "exitcode", None)
         return format_collector_death(exitcode, traceback_text)
 
-    def close(self) -> None:
+    def close(self) -> dict[str, Any]:
+        if self._closed:
+            return self.last_close_report
+        self._closed = True
+        errors: list[str] = []
+        collector_terminated = False
         self._stop_event.set()
         if self._collector_process is not None and self._collector_process.is_alive():
             self._collector_process.join(timeout=10)
             if self._collector_process.is_alive():
                 self._collector_process.terminate()
                 self._collector_process.join(timeout=5)
+                collector_terminated = True
 
         if self._collector_process is not None:
             exitcode = getattr(self._collector_process, "exitcode", None)
@@ -157,24 +171,47 @@ class AsyncRunner(ABC):
                     flush=True,
                 )
 
-        for resource in self._shared_resources:
-            if hasattr(resource, "cleanup"):
-                resource.cleanup()
-            elif hasattr(resource, "close"):
-                resource.close()
+        resources = list(self._shared_resources)
+        for resource in resources:
+            try:
+                if hasattr(resource, "cleanup"):
+                    resource.cleanup()
+                elif hasattr(resource, "close"):
+                    resource.close()
+                    join_thread = getattr(resource, "join_thread", None)
+                    if callable(join_thread):
+                        join_thread()
+            except Exception as exc:
+                errors.append(f"{type(resource).__name__}: {type(exc).__name__}: {exc}")
+        self._shared_resources.clear()
 
         if self._error_recv is not None:
             try:
                 self._error_recv.close()
-            except Exception:
-                pass
+            except Exception as exc:
+                errors.append(f"error_recv: {type(exc).__name__}: {exc}")
             self._error_recv = None
         if self._error_send is not None:
             try:
                 self._error_send.close()
-            except Exception:
-                pass
+            except Exception as exc:
+                errors.append(f"error_send: {type(exc).__name__}: {exc}")
             self._error_send = None
+
+        self.last_close_report = {
+            "state": "failed" if errors else "complete",
+            "collector_exitcode": (
+                getattr(self._collector_process, "exitcode", None)
+                if self._collector_process is not None
+                else None
+            ),
+            "collector_terminated": collector_terminated,
+            "resource_count": len(resources),
+            "errors": errors,
+        }
+        if errors:
+            raise RuntimeError("AsyncRunner cleanup failed: " + "; ".join(errors))
+        return self.last_close_report
 
     def __del__(self):
         try:

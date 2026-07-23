@@ -1,0 +1,111 @@
+{
+  "contract": "AMP-WALK-TRAIN-v001",
+  "step": 7,
+  "classification": "performance-fail",
+  "threshold_time_overhead_pct": 30.0,
+  "machine": {
+    "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
+    "torch": "2.7.0",
+    "learner_device": "mps",
+    "collector_device": "mps",
+    "cpu_count": 10,
+    "system_memory_bytes": 17179869184,
+    "separate_vram_available": false
+  },
+  "matched_identity": {
+    "backend": "mujoco",
+    "num_envs": 2048,
+    "steps_per_env": 24,
+    "iterations": 10,
+    "warmup_iterations_excluded": 2,
+    "seed": 1,
+    "staging_capacity": 3,
+    "actor_hidden_dims": [512, 256, 128],
+    "critic_hidden_dims": [512, 256, 128]
+  },
+  "runs": {
+    "baseline": {
+      "task": "G1WalkFlat",
+      "runtime": "generic_appo",
+      "log_dir": "/private/tmp/unilab_amp_step7_baseline_r1",
+      "run_config_sha256": "39b75bf144bcedbc042e42d78fb908875509d680ef632ba35a239231791dccea",
+      "checkpoint_sha256": "9d53aff111f902fecabc030229f98b4eb52f0c171af4f05ab7a1f3f3b2031cec",
+      "training_wall_time_sec": 26.002965927124023,
+      "peak_rss_bytes": 775831552,
+      "warm_mean_ms": {
+        "learner_wait": 234.1161346435547,
+        "learner_h2d": 20.593057572841644,
+        "learner_train": 1954.948257446289,
+        "learner_weight_sync": 13.662624597549438,
+        "collector_mlp_infer": 2.8673521280288696,
+        "collector_env_step": 93.91948890686035
+      },
+      "warm_reconstructed_end_to_end_steps_per_sec": 22107.478529142583
+    },
+    "amp_env_generic_appo": {
+      "task": "G1AMPWalk",
+      "runtime": "generic_appo",
+      "log_dir": "/private/tmp/unilab_amp_step7_envonly_r1",
+      "run_config_sha256": "43bf41367677fa0e8df73e7f0316fd6115fea99d3b536cf1739a949964914743",
+      "checkpoint_sha256": "d4be4552d1358acd6fe2c33c8a9eb88b40c4c40805c12dd8e12ef7571fda6fa2",
+      "training_wall_time_sec": 39.80256915092468,
+      "peak_rss_bytes": 1274560512,
+      "warm_mean_ms": {
+        "learner_wait": 1246.0417098999023,
+        "learner_h2d": 18.08442735671997,
+        "learner_train": 2606.626739501953,
+        "learner_weight_sync": 9.63749486207962,
+        "collector_mlp_infer": 3.3316798210144043,
+        "collector_env_step": 148.64422798156738
+      },
+      "warm_reconstructed_end_to_end_steps_per_sec": 12666.766812712864
+    },
+    "full_amp": {
+      "task": "G1AMPWalk",
+      "runtime": "amp_appo",
+      "log_dir": "/private/tmp/unilab_amp_step7_amp_r1",
+      "run_config_sha256": "895bb538716f7b1703ca70edf0d93ddf0522c55c06dffed9726e8312e2eec915",
+      "checkpoint_sha256": "757bb9511d2b4e9941008f82681c7a64e69e60f25d6c30bbbd79b5c6ddb9e790",
+      "training_wall_time_sec": 48.37993311882019,
+      "peak_rss_bytes": 1284587520,
+      "warm_mean_ms": {
+        "learner_wait": 659.6847815513611,
+        "learner_h2d": 28.040380001068115,
+        "learner_train": 3655.9797973632812,
+        "learner_weight_sync": 27.327141106128693,
+        "collector_mlp_infer": 4.918126851320267,
+        "collector_env_step": 189.25626373291016
+      },
+      "warm_reconstructed_end_to_end_steps_per_sec": 11244.941435295257
+    }
+  },
+  "comparisons": {
+    "full_amp_vs_baseline_time_overhead_pct": 96.59932118234377,
+    "full_amp_vs_baseline_wall_time_overhead_pct": 86.05544173080067,
+    "full_amp_vs_baseline_throughput_drop_pct": 49.1351373636206,
+    "amp_env_generic_vs_baseline_time_overhead_pct": 74.53134533869093,
+    "full_amp_vs_amp_env_generic_time_overhead_pct": 12.64413323625526,
+    "full_amp_vs_baseline_peak_rss_overhead_pct": 65.57557071357675
+  },
+  "micro_probe": {
+    "operation": "build_amp_observation_from_selected",
+    "batch_size": 2048,
+    "mean_ms": 1.5762066596653312,
+    "interpretation": "The 195-D NumPy transform is not the primary collector bottleneck."
+  },
+  "lifecycle": {
+    "all_runs_completed": true,
+    "collector_exitcodes": [0, 0, 0],
+    "collector_terminated": [false, false, false],
+    "resource_count": [4, 4, 4],
+    "errors": [[], [], []]
+  },
+  "bottleneck_verdict": {
+    "primary_owner": "MuJoCo tracked-body sensor contract used by G1AMPWalk",
+    "primary_evidence": "The env-only ablation accounts for 74.5% time overhead. add_body_sensors injects world and pelvis-relative sensors for every G1 body although AMP consumes 14 world-frame body states.",
+    "secondary_owner": "AMPAPPOLearner discriminator and reward path",
+    "secondary_evidence": "Full AMP adds 12.6% end-to-end time over the env-only ablation and raises warm learner train time by 40.3%.",
+    "not_primary": "The measured H2D copy is small in absolute time; float16 transport is not justified before narrowing the sensor owner.",
+    "projection": "The 10-20 minute useful-policy projection is rejected on this local MPS identity. A CUDA target-machine A/B remains unverified."
+  }
+}

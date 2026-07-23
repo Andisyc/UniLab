@@ -402,6 +402,7 @@ class G1WalkEnvCfg(G1BaseCfg):
     standing_reset_base_qvel_limit: float = 0.0
     stand_action_authority: bool = False
     curriculum: CurriculumConfig = field(default_factory=CurriculumConfig)
+    add_body_sensors: bool = False
 
 
 class G1WalkDomainRandomizationProvider(LocomotionDRProvider):
@@ -512,7 +513,15 @@ class G1WalkDomainRandomizationProvider(LocomotionDRProvider):
         dof_pos: Any,
         dof_vel: Any,
     ) -> dict[str, np.ndarray]:
-        return env._compute_obs(info_updates, linvel, gyro, gravity, dof_pos, dof_vel)  # type: ignore[no-any-return]
+        return env._compute_obs_for_rows(  # type: ignore[no-any-return]
+            info_updates,
+            linvel,
+            gyro,
+            gravity,
+            dof_pos,
+            dof_vel,
+            env_ids=env_ids,
+        )
 
 
 class G1WalkEnv(G1BaseEnv):
@@ -531,6 +540,7 @@ class G1WalkEnv(G1BaseEnv):
             push_body_name=cfg.domain_rand.push_body_name,
             motrix_max_iterations=cfg.motrix_max_iterations,
             post_step_forward_sensor=cfg.post_step_forward_sensor,
+            add_body_sensors=cfg.add_body_sensors,
         )
         super().__init__(cfg, backend, num_envs)
         self._enable_reward_log = True
@@ -858,6 +868,20 @@ class G1WalkEnv(G1BaseEnv):
         )
 
         return {"obs": actor, "critic": critic}
+
+    def _compute_obs_for_rows(
+        self,
+        info: dict,
+        linvel,
+        gyro,
+        gravity,
+        dof_pos,
+        dof_vel,
+        *,
+        env_ids,
+    ) -> dict[str, np.ndarray]:
+        del env_ids
+        return self._compute_obs(info, linvel, gyro, gravity, dof_pos, dof_vel)
 
     def _uses_height_command_observation(self) -> bool:
         command_cfg = getattr(self._cfg, "commands", None)

@@ -22,6 +22,18 @@ from unilab.base.registry import ensure_registries
 from unilab.training.seed import apply_training_seed
 
 
+def _close_appo_collector_resources(resources: list[Any]) -> None:
+    """Close every collector-owned resource in reverse construction order."""
+    errors: list[str] = []
+    for resource in reversed(resources):
+        try:
+            resource.close()
+        except Exception as exc:
+            errors.append(f"{type(resource).__name__}: {type(exc).__name__}: {exc}")
+    if errors:
+        raise RuntimeError("APPO collector cleanup failed: " + "; ".join(errors))
+
+
 def put_latest_metrics(metrics_queue: Any, msg: dict[str, Any], *, worker_name: str) -> None:
     """Best-effort metrics enqueue that keeps recent data under learner stalls."""
     try:
@@ -80,7 +92,7 @@ def compute_timeout_bootstrap_correction(
     return corrections
 
 
-def appo_collector_fn(
+def _run_appo_collector(
     stop_event: Any,
     env_name: str,
     rl_cfg: dict,
@@ -101,6 +113,9 @@ def appo_collector_fn(
     env_cfg_override: dict | None = None,
     seed: int | None = None,
     nan_guard_cfg=None,
+    extra_rollout_fields: dict | None = None,
+    rollout_payload_writer: str | None = None,
+    resources: list[Any] | None = None,
 ):
     """Entry point for the APPO collector subprocess.
 
@@ -118,6 +133,8 @@ def appo_collector_fn(
     ensure_registries()
     apply_training_seed(seed, torch_runtime=True, cuda=True)
 
+    assert resources is not None
+
     # Connect to shared memory
     ring_buffer = RolloutRingBuffer(
         num_envs=num_envs,
@@ -127,19 +144,24 @@ def appo_collector_fn(
         critic_dim=critic_dim,
         create=False,
         shm_name_prefix=shm_rollout_ring_buffer_name,
+        extra_fields=extra_rollout_fields,
     )
+    resources.append(ring_buffer)
     ring_buffer.attach_sync_primitives(*sync_primitives)  # (write_ptr, read_ptr)
     actor_weight_sync = SharedWeightSync(
         actor_weight_param_shapes, create=False, shm_name=actor_weight_sync_name
     )
+    resources.append(actor_weight_sync)
     critic_weight_sync = SharedWeightSync(
         critic_weight_param_shapes, create=False, shm_name=critic_weight_sync_name
     )
+    resources.append(critic_weight_sync)
 
     # Create environment
     env: Any = registry.make(
         env_name, num_envs=num_envs, sim_backend=sim_backend, env_cfg_override=env_cfg_override
     )
+    resources.append(env)
 
     if nan_guard_cfg is not None and nan_guard_cfg.enabled:
         from unilab.utils.nan_guard import NanGuard
@@ -215,6 +237,10 @@ def appo_collector_fn(
     obs_np, critic_np = split_obs_dict(obs_out)
     obs_np = to_float32_np(obs_np)
     critic_np = to_float32_np(critic_np)
+    current_observation = obs_out
+    payload_writer = (
+        resolve_callable(rollout_payload_writer) if rollout_payload_writer is not None else None
+    )
 
     # Pre-allocate obs TensorDict once; update in-place each step to avoid
     # repeated TensorDict construction overhead in the hot loop.
@@ -282,6 +308,14 @@ def appo_collector_fn(
                 combined_done_raw = (
                     (state.terminated | state.truncated).astype(np.float32, copy=False).ravel()
                 )
+
+                if payload_writer is not None:
+                    payload_writer(
+                        write_buffer=write_buf,
+                        step=step,
+                        current_observation=current_observation,
+                        state=state,
+                    )
 
                 next_actor_obs_np, next_critic_np = split_obs_dict(next_obs_raw)
                 next_actor_obs_np = to_float32_np(next_actor_obs_np)
@@ -369,6 +403,7 @@ def appo_collector_fn(
 
                 obs_np = next_actor_obs_np
                 critic_np = next_critic_np
+                current_observation = next_obs_raw
 
             write_buf["last_obs"][:] = obs_np
             if critic_np is not None:
@@ -379,7 +414,61 @@ def appo_collector_fn(
         stop_event.set()
         raise
 
-    ring_buffer.close()
-    actor_weight_sync.close()
-    critic_weight_sync.close()
-    env.close()
+
+def appo_collector_fn(
+    stop_event: Any,
+    env_name: str,
+    rl_cfg: dict,
+    num_envs: int,
+    steps_per_env: int,
+    shm_rollout_ring_buffer_name: Dict[str, str],
+    sync_primitives: tuple,
+    obs_dim: int,
+    action_dim: int,
+    critic_dim: int,
+    actor_weight_sync_name: str,
+    actor_weight_param_shapes: dict,
+    critic_weight_sync_name: str,
+    critic_weight_param_shapes: dict,
+    metrics_queue: Any,
+    collector_device: str = "cpu",
+    sim_backend: str = "mujoco",
+    env_cfg_override: dict | None = None,
+    seed: int | None = None,
+    nan_guard_cfg=None,
+    extra_rollout_fields: dict | None = None,
+    rollout_payload_writer: str | None = None,
+):
+    """Run one collector and close all resources on every exit path."""
+    resources: list[Any] = []
+    try:
+        return _run_appo_collector(
+            stop_event=stop_event,
+            env_name=env_name,
+            rl_cfg=rl_cfg,
+            num_envs=num_envs,
+            steps_per_env=steps_per_env,
+            shm_rollout_ring_buffer_name=shm_rollout_ring_buffer_name,
+            sync_primitives=sync_primitives,
+            obs_dim=obs_dim,
+            action_dim=action_dim,
+            critic_dim=critic_dim,
+            actor_weight_sync_name=actor_weight_sync_name,
+            actor_weight_param_shapes=actor_weight_param_shapes,
+            critic_weight_sync_name=critic_weight_sync_name,
+            critic_weight_param_shapes=critic_weight_param_shapes,
+            metrics_queue=metrics_queue,
+            collector_device=collector_device,
+            sim_backend=sim_backend,
+            env_cfg_override=env_cfg_override,
+            seed=seed,
+            nan_guard_cfg=nan_guard_cfg,
+            extra_rollout_fields=extra_rollout_fields,
+            rollout_payload_writer=rollout_payload_writer,
+            resources=resources,
+        )
+    except BaseException:
+        stop_event.set()
+        raise
+    finally:
+        _close_appo_collector_resources(resources)

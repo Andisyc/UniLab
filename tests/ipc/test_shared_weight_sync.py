@@ -89,8 +89,13 @@ def test_close_without_unlink(tiny_weight_shapes):
     """close() closes the handle without unlinking — safe to call from attached processes."""
     state_dict = _make_state_dict(tiny_weight_shapes)
     ws = SharedWeightSync.from_state_dict(state_dict, create=True)
+    shm_name = ws.name
     ws.close()  # must not raise
     ws.cleanup()  # owner still unlinks
+    from multiprocessing import shared_memory
+
+    with pytest.raises(FileNotFoundError):
+        shared_memory.SharedMemory(name=shm_name, create=False)
 
 
 def test_attach_create_false_roundtrip(tiny_weight_shapes):

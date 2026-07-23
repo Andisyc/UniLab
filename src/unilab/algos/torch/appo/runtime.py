@@ -53,7 +53,7 @@ def resolve_appo_runtime(
     from rsl_rl.utils import resolve_callable
 
     resolver = resolve_callable(str(runtime_resolver))
-    runtime = resolver(rl_cfg)
+    runtime = resolver(rl_cfg, default_play_fn=default_play_fn)
     if runtime is None:
         raise ValueError(
             f"APPO runtime resolver {runtime_resolver!r} returned None for rl_cfg runtime selection."

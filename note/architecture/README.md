@@ -16,6 +16,7 @@ same Code Block ID
 - `runtime/01_unilab_runtime_atlas.data.json`: formal UniLab runtime reading cards.
 - `architecture/02_g1_distillation_method_to_code.data.json`: distillation design-point-to-owner-code reading atlas.
 - `concept/03_g1_multiteacher_distillation_method.data.json`: active stand/walk multi-teacher distillation Concept Figure.
+- `concept/04_amp_walk_async_method.data.json`: active Phase 1 walk-only AMP Concept Figure.
 - `auxiliary/atlas_app/`: helper viewer, local server, static renderer, checks, and JS dependencies.
 
 ## Folder Contract
@@ -35,7 +36,7 @@ Temporary maps are allowed, including in the main entry page, while they are
 actively guiding a change. After the change lands, a temporary map must be
 either deleted or integrated into one of the active maps.
 
-The main entry contains exactly three active maps in numbered order. Superseded
+The main entry contains exactly four active maps in numbered order. Superseded
 supporting maps stay in Git history rather than the active Atlas surface.
 
 ## VSCode Workflow
@@ -52,6 +53,7 @@ http://127.0.0.1:8766/
 http://127.0.0.1:8766/auxiliary/atlas_app/architecture_atlas.html?data=../../runtime/01_unilab_runtime_atlas.data.json
 http://127.0.0.1:8766/auxiliary/atlas_app/architecture_atlas.html?data=../../architecture/02_g1_distillation_method_to_code.data.json
 http://127.0.0.1:8766/auxiliary/atlas_app/architecture_atlas.html?data=../../concept/03_g1_multiteacher_distillation_method.data.json
+http://127.0.0.1:8766/auxiliary/atlas_app/architecture_atlas.html?data=../../concept/04_amp_walk_async_method.data.json
 ```
 
 Open the matching `*.data.json` on the left. Saving the JSON refreshes the graph
@@ -86,6 +88,11 @@ Start at `../distillation/README.md`. Active method commitments live only under
 `../distillation/contracts/active/`; ideas not yet accepted belong under
 `../distillation/plans/`. Runtime findings belong in `evidence/` or `logs/`, not
 inside the Concept Figure.
+
+The AMP Concept Figure is governed independently by `note/amp/contracts/`.
+Its active method semantics are Phase 1 fixed-forward walking only. Planned
+AMP owners remain in the engineering plan until implementation exists; they do
+not appear as implemented Method-to-Code or Runtime cards.
 
 ## Validation
 
@@ -124,6 +131,11 @@ The active and supporting pages are data variants, not separate applications:
   - Source: `concept/03_g1_multiteacher_distillation_method.data.json`.
   - Purpose: human-controlled method intent and causal closure.
   - Main schema: `nodes[]`, `edges[]`, stable design/contract mappings.
+- AMP Walk Concept Figure uses `layout: "method_figure"`.
+  - Source: `concept/04_amp_walk_async_method.data.json`.
+  - Purpose: human-controlled Phase 1 AMP method intent and causal closure.
+  - Main schema: four design-point nodes, four causal interactions, and stable
+    `AMP-WALK` contract mappings.
 
 ## Reuse Contract
 

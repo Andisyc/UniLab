@@ -22,6 +22,9 @@ class SharedWeightSync:
         self._param_names = list(param_shapes.keys())
         self.trace_recorder: Any | None = None
         self.trace_thread_time = False
+        self._owns_shm = bool(create)
+        self._handle_closed = False
+        self._unlinked = False
 
         total_numel = sum(s.numel() for s in param_shapes.values())
         _f32 = np.dtype(np.float32).itemsize
@@ -141,14 +144,28 @@ class SharedWeightSync:
         return version
 
     def cleanup(self) -> None:
-        try:
-            self._shm.close()
-            self._shm.unlink()
-        except Exception:
-            pass
+        self._release(unlink=self._owns_shm)
+
+    def _release(self, *, unlink: bool) -> None:
+        errors: list[str] = []
+        if not self._handle_closed:
+            del self._buffer
+            del self._version_arr
+            try:
+                self._shm.close()
+            except Exception as exc:
+                errors.append(f"close: {type(exc).__name__}: {exc}")
+            self._handle_closed = True
+        if unlink and not self._unlinked:
+            try:
+                self._shm.unlink()
+            except FileNotFoundError:
+                pass
+            except Exception as exc:
+                errors.append(f"unlink: {type(exc).__name__}: {exc}")
+            self._unlinked = True
+        if errors:
+            raise RuntimeError("SharedWeightSync release failed: " + "; ".join(errors))
 
     def close(self) -> None:
-        try:
-            self._shm.close()
-        except Exception:
-            pass
+        self._release(unlink=False)

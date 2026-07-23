@@ -378,12 +378,13 @@ for (const requiredId of ["U-RT-06", "U-RT-08"]) {
 }
 
 const indexAtlasLinks = [...index.matchAll(/architecture_atlas\.html\?data=/g)];
-if (indexAtlasLinks.length !== 3) throw new Error("Atlas index must expose exactly three maps");
+if (indexAtlasLinks.length !== 4) throw new Error("Atlas index must expose exactly four maps");
 for (const forbidden of ["Supporting:", "Distillation Runtime", "Distillation Control Room"]) {
   if (index.includes(forbidden)) throw new Error(`Atlas index contains forbidden entry ${forbidden}`);
 }
 for (const required of [
   "01 UniLab Runtime Atlas", "02 Method-to-Code Atlas", "03 Concept Figure",
+  "04 AMP Walk Concept Figure",
 ]) {
   if (!index.includes(required)) throw new Error(`Atlas index missing ${required}`);
 }

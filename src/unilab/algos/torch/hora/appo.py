@@ -41,7 +41,9 @@ class HoraAPPORuntime:
     play_fn: Callable[..., str | None]
 
 
-def resolve_hora_appo_runtime(rl_cfg: dict[str, Any]) -> HoraAPPORuntime | None:
+def resolve_hora_appo_runtime(
+    rl_cfg: dict[str, Any], *, default_play_fn=None
+) -> HoraAPPORuntime | None:
     """Resolve HORA APPO entrypoints from an explicit runtime marker.
 
     Args:
@@ -51,6 +53,7 @@ def resolve_hora_appo_runtime(rl_cfg: dict[str, Any]) -> HoraAPPORuntime | None:
         ``HoraAPPORuntime`` when the owner config selects HORA APPO, otherwise
         ``None``.
     """
+    del default_play_fn
     if not is_hora_appo_runtime(rl_cfg):
         return None
     return HoraAPPORuntime(runner_cls=HoraAPPORunner, play_fn=play_hora_appo)

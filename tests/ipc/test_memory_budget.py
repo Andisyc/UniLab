@@ -5,9 +5,34 @@ import os
 import pytest
 
 from unilab.ipc.memory_budget import (
+    estimate_appo_bytes,
     estimate_offpolicy_bytes,
     raise_if_shared_memory_over_budget,
 )
+
+
+def test_appo_memory_budget_includes_extra_rollout_fields() -> None:
+    base = estimate_appo_bytes(
+        num_envs=2048,
+        steps_per_env=24,
+        obs_dim=98,
+        action_dim=29,
+        critic_dim=101,
+        num_slots=4,
+    )
+    amp_bytes_per_slot = 2 * 195 * 2048 * 24 * 4
+    extended = estimate_appo_bytes(
+        num_envs=2048,
+        steps_per_env=24,
+        obs_dim=98,
+        action_dim=29,
+        critic_dim=101,
+        num_slots=4,
+        extra_bytes_per_slot=amp_bytes_per_slot,
+    )
+
+    assert int(extended["total"]) - int(base["total"]) == amp_bytes_per_slot * 4
+    assert "extra fields" in str(extended["breakdown"])
 
 
 def test_offpolicy_memory_budget_notes_native_exclusions() -> None:

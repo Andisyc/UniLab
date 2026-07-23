@@ -156,6 +156,35 @@ def test_close_handles_multiple_resources():
         res.cleanup.assert_called_once()
 
 
+def test_close_closes_and_joins_queue_resources():
+    r = _make_runner()
+    queue_resource = MagicMock(spec=["close", "join_thread"])
+    r._shared_resources.append(queue_resource)
+
+    report = r.close()
+
+    queue_resource.close.assert_called_once()
+    queue_resource.join_thread.assert_called_once()
+    assert report["state"] == "complete"
+    assert report["resource_count"] == 1
+
+
+def test_close_reports_resource_failure_after_attempting_all_cleanup():
+    r = _make_runner()
+    failing = MagicMock(spec=["cleanup"])
+    failing.cleanup.side_effect = RuntimeError("synthetic cleanup failure")
+    following = MagicMock(spec=["cleanup"])
+    r._shared_resources.extend([failing, following])
+
+    with pytest.raises(RuntimeError, match="synthetic cleanup failure"):
+        r.close()
+
+    following.cleanup.assert_called_once()
+    assert r.last_close_report["state"] == "failed"
+    assert r.last_close_report["resource_count"] == 2
+    assert len(r.last_close_report["errors"]) == 1
+
+
 # ---------------------------------------------------------------------------
 # close() — with live collector process
 # ---------------------------------------------------------------------------

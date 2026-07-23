@@ -1,0 +1,65 @@
+# @package _global_
+training:
+  task_name: G1AMPWalk
+  sim_backend: mujoco
+
+algo:
+  runtime_impl: amp_appo
+  runtime_resolver: unilab.algos.torch.amp.runtime:resolve_amp_appo_runtime
+  algo_log_name: amp_appo
+  num_envs: 2048
+  steps_per_env: 24
+  max_iterations: 150
+  save_interval: 50
+  amp:
+    motion_manifest: src/unilab/assets/motions/g1/amp_walk/manifest.json
+    hidden_dims: [1024, 512, 256]
+    reward_coef: 0.1
+    task_reward_lerp: 0.75
+    replay_capacity: 32768
+    discriminator_batch_size: 4096
+    discriminator_updates: 1
+    discriminator_learning_rate: 1.0e-3
+    gradient_penalty: 10.0
+    seed: 1
+
+env:
+  control_config:
+    action_scale: 0.25
+  commands:
+    vel_limit:
+      - [1.0, 0.0, 0.0]
+      - [1.0, 0.0, 0.0]
+    rel_standing_envs: 0.0
+    rel_transition_envs: 0.0
+    heading_command: false
+    small_xy_threshold: 0.0
+    observe_height_command: false
+    random_height_during_walking: false
+  curriculum:
+    enabled: false
+  noise_config:
+    level: 1.0
+    scale_joint_angle: 0.01
+    scale_joint_vel: 1.5
+    scale_gyro: 0.2
+
+reward:
+  scales:
+    tracking_lin_vel: 2.0
+    tracking_ang_vel: 0.2
+    lin_vel_z: -1.0
+    ang_vel_xy: -0.25
+    base_height: -500.0
+    orientation: -5.0
+    action_rate: -0.01
+    pose: -0.1
+    alive: 1.0
+  tracking_sigma: 0.25
+  gait_frequency: 1.5
+  feet_phase_swing_height: 0.09
+  feet_phase_tracking_sigma: 0.008
+  base_height_target: 0.754
+  min_base_height: 0.55
+  max_tilt_deg: 25.0
+  pose_weights: [0.01, 1.0, 5.0, 0.01, 5.0, 5.0, 0.01, 1.0, 5.0, 0.01, 5.0, 5.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0]
