@@ -3,6 +3,7 @@ import rough from "./node_modules/roughjs/bundled/rough.esm.js";
 
 const html = fs.readFileSync("architecture_atlas.html", "utf8");
 const indexHtml = fs.readFileSync("../../index.html", "utf8");
+const launcher = fs.readFileSync("../../start.command", "utf8");
 const runtimeAtlas = JSON.parse(
   fs.readFileSync("../../runtime/01_unilab_runtime_atlas.data.json", "utf8"),
 );
@@ -31,11 +32,20 @@ if (!html.includes('<main id="layout" class="editor-hidden">')) {
 if (!html.includes('<button id="toggle-editor">Show Editor</button>')) {
   throw new Error("architecture_atlas.html default toggle label should be Show Editor");
 }
-if (!indexHtml.includes('window.location.origin !== "http://127.0.0.1:8766"')) {
-  throw new Error("index.html must canonicalize non-Atlas origins to the local Atlas server");
+if (!indexHtml.includes('window.location.protocol !== "file:"')) {
+  throw new Error("index.html must remain readable when opened directly from Finder");
 }
 if (!indexHtml.includes('window.location.replace("http://127.0.0.1:8766/")')) {
   throw new Error("index.html redirect must target the UniLab Atlas server on port 8766");
+}
+if (!indexHtml.includes('id="local-launch-help"')) {
+  throw new Error("index.html must explain how to start the Atlas server when opened locally");
+}
+if (!launcher.includes('node auxiliary/atlas_app/serve_architecture.mjs')) {
+  throw new Error("start.command must launch the Architecture Atlas server");
+}
+if (!launcher.includes('http://127.0.0.1:${PORT}/')) {
+  throw new Error("start.command must open the configured local Atlas URL");
 }
 if (!html.includes('architecture_atlas.html${window.location.search}')) {
   throw new Error("direct viewer access must preserve its data query while canonicalizing the Atlas origin");

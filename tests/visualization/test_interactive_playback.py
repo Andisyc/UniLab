@@ -18,6 +18,7 @@ if str(_SCRIPTS_DIR) not in sys.path:
 
 from unilab.visualization.interactive_playback import (
     KeyboardCommander,
+    OffPolicyPlaybackSession,
     PlaybackControls,
     RslRlPlaybackConfig,
     RslRlPlaybackSession,
@@ -151,6 +152,33 @@ def test_rt2_playback_session_set_external_command_refreshes_observation() -> No
 
     assert env.refresh_calls == 1
     torch.testing.assert_close(session.obs[0, :3], torch.tensor([0.2, 0.0, 0.0]))
+
+
+def test_offpolicy_playback_session_refreshes_observation_without_stepping() -> None:
+    env = SimpleNamespace(
+        state=SimpleNamespace(
+            obs={"obs": np.asarray([[0.2, 0.0, 0.0, 1.0]], dtype=np.float32)},
+            info={},
+        ),
+        get_physics_state_snapshot=lambda: np.zeros((1, 4), dtype=np.float32),
+    )
+    session = OffPolicyPlaybackSession(
+        env=env,
+        device="cpu",
+        action_mode="zero",
+        actor=None,
+        actor_algo_type="sac",
+        normalizer=None,
+        num_envs=1,
+        obs_extractor=lambda obs: obs["obs"],
+        priv_info_resolver=lambda **_kwargs: None,
+    )
+    session.obs = np.zeros((1, 4), dtype=np.float32)
+
+    refreshed = session.refresh_observation()
+
+    np.testing.assert_array_equal(refreshed, env.state.obs["obs"])
+    assert session.step_count == 0
 
 
 def test_create_rsl_rl_playback_session_loads_checkpoint_and_runner_log_dir() -> None:

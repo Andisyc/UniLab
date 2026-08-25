@@ -174,7 +174,11 @@ note/architecture/
     package-lock.json
 ```
 
-In the new project, start the viewer from the copied folder:
+On macOS, double-click `start.command` in this folder. It starts the local
+server, waits until it is ready, and opens the index in the browser. Keep the
+terminal window open while using the Atlas.
+
+The equivalent manual startup command is:
 
 ```bash
 cd note/architecture

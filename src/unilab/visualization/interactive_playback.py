@@ -174,6 +174,8 @@ class PlaybackSession(Protocol):
 
     def reset(self) -> Any: ...
 
+    def refresh_observation(self) -> Any: ...
+
     def advance(self, controls: PlaybackControls) -> bool: ...
 
     def physics_state(self) -> np.ndarray: ...
@@ -333,6 +335,23 @@ class OffPolicyPlaybackSession:
         self.obs = np.asarray(self.obs_extractor(obs_out), dtype=np.float32)
         self.current_priv_info = self._resolve_priv_info(obs_out, info_out)
         self.step_count = 0
+        return self.obs
+
+    def refresh_observation(self) -> np.ndarray:
+        """Reload the current env observation without advancing the session."""
+
+        state = getattr(self.env, "state", None)
+        obs_out = getattr(state, "obs", None)
+        if not isinstance(obs_out, dict):
+            raise RuntimeError(
+                "Off-policy playback observation refresh requires env.state.obs as a dict."
+            )
+        info_out = getattr(state, "info", None)
+        self.obs = np.asarray(self.obs_extractor(obs_out), dtype=np.float32)
+        self.current_priv_info = self._resolve_priv_info(
+            obs_out,
+            info_out if isinstance(info_out, dict) else None,
+        )
         return self.obs
 
     def step_once(self) -> np.ndarray:

@@ -5,7 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>UniLab Human Control Atlas</title>
   <script>
-    if (window.location.origin !== "http://127.0.0.1:8766") {
+    if (
+      window.location.protocol !== "file:"
+      && window.location.origin !== "http://127.0.0.1:8766"
+    ) {
       window.location.replace("http://127.0.0.1:8766/");
     }
   </script>
@@ -28,6 +31,21 @@
       color: #5d6976;
       max-width: 780px;
       line-height: 1.6;
+    }
+
+    .launch-help {
+      max-width: 780px;
+      margin: 22px 0;
+      padding: 16px 18px;
+      color: #6b3f16;
+      background: #fff3d6;
+      border: 1px solid #dfbd77;
+      border-radius: 8px;
+    }
+
+    .launch-help code {
+      color: #3f2b16;
+      font-family: "SFMono-Regular", Consolas, monospace;
     }
 
     .grid {
@@ -67,6 +85,10 @@
   <p>
     当前保留四张活动地图：先阅读 UniLab runtime 与蒸馏 Method-to-Code，再分别由蒸馏和 AMP Concept Figure 控制各自的方法语义。
   </p>
+  <aside id="local-launch-help" class="launch-help" hidden>
+    当前页面是直接从本地文件打开的，Architecture Atlas 服务尚未启动。
+    请双击同目录的 <code>start.command</code>；终端窗口保持打开期间，地图和源码跳转均可使用。
+  </aside>
   <section class="grid">
     <a href="./auxiliary/atlas_app/architecture_atlas.html?data=../../runtime/01_unilab_runtime_atlas.data.json">
       <strong>01 UniLab Runtime Atlas</strong>
@@ -85,5 +107,10 @@
       <span>前进行走专家 transition、策略 transition、learner-only D_k 与异步 APPO 如何闭合为一个 AMP 行走策略。</span>
     </a>
   </section>
+  <script>
+    if (window.location.protocol === "file:") {
+      document.getElementById("local-launch-help").hidden = false;
+    }
+  </script>
 </body>
 </html>
