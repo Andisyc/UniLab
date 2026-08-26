@@ -94,3 +94,4 @@ g1-walk-stand-native-heap-trace-r5-console.log
 g1-walk-stand-native-heap-trace-r5-console.log
 logs
 checkpoints
+.venv
