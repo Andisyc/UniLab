@@ -9,7 +9,7 @@ algo:
   algo_log_name: amp_appo
   num_envs: 2048
   steps_per_env: 24
-  max_iterations: 150
+  max_iterations: 2000
   save_interval: 50
   amp:
     motion_manifest: src/unilab/assets/motions/g1/regait_v012_walk_forward_126/manifest.json

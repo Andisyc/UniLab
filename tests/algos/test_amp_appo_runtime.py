@@ -115,6 +115,7 @@ def test_g1_amp_walk_owner_yaml_composes_without_gait_or_distillation() -> None:
     assert resolved["training"]["task_name"] == "G1AMPWalk"
     assert resolved["algo"]["runtime_impl"] == "amp_appo"
     assert resolved["algo"]["runtime_resolver"].endswith(":resolve_amp_appo_runtime")
+    assert resolved["algo"]["max_iterations"] == 2000
     assert resolved["env"]["commands"]["vel_limit"] == [
         [1.0, 0.0, 0.0],
         [1.0, 0.0, 0.0],
