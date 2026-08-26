@@ -12,7 +12,7 @@ algo:
   max_iterations: 150
   save_interval: 50
   amp:
-    motion_manifest: src/unilab/assets/motions/g1/amp_walk/manifest.json
+    motion_manifest: src/unilab/assets/motions/g1/regait_v012_walk_forward_126/manifest.json
     hidden_dims: [1024, 512, 256]
     reward_coef: 0.1
     task_reward_lerp: 0.75

@@ -1,0 +1,104 @@
+{
+  "anchor_body_index": 15,
+  "anchor_body_name": "torso_link",
+  "body_indices": [
+    0,
+    2,
+    4,
+    6,
+    8,
+    10,
+    12,
+    17,
+    19,
+    22,
+    24,
+    26,
+    29
+  ],
+  "body_names": [
+    "pelvis",
+    "left_hip_roll_link",
+    "left_knee_link",
+    "left_ankle_roll_link",
+    "right_hip_roll_link",
+    "right_knee_link",
+    "right_ankle_roll_link",
+    "left_shoulder_roll_link",
+    "left_elbow_link",
+    "left_wrist_yaw_link",
+    "right_shoulder_roll_link",
+    "right_elbow_link",
+    "right_wrist_yaw_link"
+  ],
+  "motion_class": "forward_walk",
+  "motions": [
+    {
+      "candidate_identity": "sha256:b36751239bff339b99d0c07d17ea64e323351fec499a0fd59b0205307c542248",
+      "file": "walk_forward_regait_v012_b36751239bff339b.npz",
+      "fps": 50.0,
+      "frames": 126,
+      "sha256": "d70d091dcf2d20177c8e9697ba368847cda7ac2b619c3de2549de58f4eb95a2e",
+      "source_identity": {
+        "kind": "motion",
+        "locator": "../AMP_mjlab/src/assets/motions/g1/amp/WalkandRun/walk_forward_loop_002__A022.npz",
+        "schema": "amp-mjlab-g1-29dof-npz-v001",
+        "sha256": "dc1eba2d7f124d99d058562072a2376bcf123ec52b7c2b565abd723c3f688e1f"
+      }
+    }
+  ],
+  "regait_provenance": {
+    "body_contract_sha256": "1d10b6d887b72303132b882fa3803ae8474eab38d817fb596c47fedf82c53ddc",
+    "candidate_identity": "sha256:b36751239bff339b99d0c07d17ea64e323351fec499a0fd59b0205307c542248",
+    "carrier_schema_version": "regait-amp-atomic-carrier/v001",
+    "carrier_sha256": "d70d091dcf2d20177c8e9697ba368847cda7ac2b619c3de2549de58f4eb95a2e",
+    "complete_body_names": [
+      "pelvis",
+      "left_hip_pitch_link",
+      "left_hip_roll_link",
+      "left_hip_yaw_link",
+      "left_knee_link",
+      "left_ankle_pitch_link",
+      "left_ankle_roll_link",
+      "right_hip_pitch_link",
+      "right_hip_roll_link",
+      "right_hip_yaw_link",
+      "right_knee_link",
+      "right_ankle_pitch_link",
+      "right_ankle_roll_link",
+      "waist_yaw_link",
+      "waist_roll_link",
+      "torso_link",
+      "left_shoulder_pitch_link",
+      "left_shoulder_roll_link",
+      "left_shoulder_yaw_link",
+      "left_elbow_link",
+      "left_wrist_roll_link",
+      "left_wrist_pitch_link",
+      "left_wrist_yaw_link",
+      "right_shoulder_pitch_link",
+      "right_shoulder_roll_link",
+      "right_shoulder_yaw_link",
+      "right_elbow_link",
+      "right_wrist_roll_link",
+      "right_wrist_pitch_link",
+      "right_wrist_yaw_link"
+    ],
+    "policy_id": "REGAIT-AMP-READINESS-v002",
+    "robot_identity": {
+      "kind": "robot-mjcf",
+      "locator": "../AMP_mjlab/src/assets/robots/unitree_g1/xmls/g1.xml",
+      "schema": "mujoco-mjcf-g1-29dof",
+      "sha256": "56539bc76eadb05dd439c47de94df52130ea8fa243d08bdddd9cbc32dd4c78a0"
+    },
+    "schema_version": "regait-unilab-amp-bundle/v001",
+    "source_identity": {
+      "kind": "motion",
+      "locator": "../AMP_mjlab/src/assets/motions/g1/amp/WalkandRun/walk_forward_loop_002__A022.npz",
+      "schema": "amp-mjlab-g1-29dof-npz-v001",
+      "sha256": "dc1eba2d7f124d99d058562072a2376bcf123ec52b7c2b565abd723c3f688e1f"
+    },
+    "target_gait_id": "REGAIT-TARGET-GAIT-v001"
+  },
+  "schema_version": 1
+}
